@@ -32,6 +32,7 @@ func (this *Cache) Get(key string) (value interface{}) {
 		return nil
 	}
 	if item.expired() {
+		delete(this.items, key)
 		return nil
 	}
 	item.touch(this.ttl)
