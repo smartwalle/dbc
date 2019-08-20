@@ -8,11 +8,14 @@ import (
 )
 
 func TestNewCache(t *testing.T) {
-	var c = dbc.NewCache(time.Second * 5)
-	c.Set("aa", "ccc")
+	var c = dbc.NewCache()
+	c.Set("aa", "ccc", time.Second*5)
+	c.Set("ab", "ccc", time.Second*5)
+	c.Set("ac", "ccc", time.Second*5)
+	c.Set("ad", "ccc", time.Second*5)
 	fmt.Println(c.Count())
 
-	c.Set("bb", "ddd")
+	c.Set("bb", "ddd", time.Second*4)
 	fmt.Println(c.Count())
 
 	time.Sleep(time.Second * 6)
@@ -21,8 +24,8 @@ func TestNewCache(t *testing.T) {
 }
 
 func BenchmarkNewCache(b *testing.B) {
-	var c = dbc.NewCache(time.Second * 1)
+	var c = dbc.NewCache()
 	for i := 0; i < b.N; i++ {
-		c.Set(fmt.Sprintf("%d", i), "xxxxx")
+		c.Set(fmt.Sprintf("%d", i), "xxxxx", time.Second*5)
 	}
 }

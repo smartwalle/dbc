@@ -5,37 +5,49 @@ import (
 	"time"
 )
 
-func newItem(value interface{}, ttl time.Duration) *item {
-	var i = &item{}
-	i.value = value
-	i.touch(ttl)
-	return i
-}
+func newCacheItem(value interface{}, ttl time.Duration) *cacheItem {
+	var now = time.Now()
 
-type item struct {
-	sync.RWMutex
-	value   interface{}
-	expires *time.Time
-}
-
-func (this *item) touch(ttl time.Duration) {
-	this.Lock()
-	defer this.Unlock()
-
-	var expires = time.Now().Add(ttl)
-	this.expires = &expires
-}
-
-func (this *item) expired() bool {
-	this.RLock()
-	defer this.RUnlock()
-
-	if this.expires == nil {
-		return true
+	if ttl < 0 {
+		ttl = 0
 	}
 
-	if this.expires.Before(time.Now()) {
-		return true
+	var item = &cacheItem{}
+	item.value = value
+	item.ttl = ttl
+	item.accessedOn = now
+	return item
+}
+
+type cacheItem struct {
+	mu    sync.RWMutex
+	value interface{}
+
+	ttl        time.Duration
+	accessedOn time.Time
+}
+
+func (this *cacheItem) touch() {
+	this.mu.Lock()
+	defer this.mu.Unlock()
+
+	this.accessedOn = time.Now()
+}
+
+func (this *cacheItem) expired(now time.Time) (bool, time.Duration) {
+	this.mu.RLock()
+	var ttl = this.ttl
+	var accessedOn = this.accessedOn
+	this.mu.RUnlock()
+
+	if ttl == 0 {
+		return false, 0
 	}
-	return false
+
+	if now.Sub(accessedOn) >= ttl {
+		return true, -1
+	}
+
+	ttl = ttl - now.Sub(accessedOn)
+	return false, ttl
 }

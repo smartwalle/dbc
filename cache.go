@@ -5,46 +5,48 @@ import (
 	"time"
 )
 
-func NewCache(ttl time.Duration) *Cache {
+func NewCache() *Cache {
 	var c = &Cache{}
-	if ttl < time.Second {
-		ttl = time.Second
-	}
-	c.ttl = ttl
-	c.items = make(map[string]*item)
-	c.run()
+	c.items = make(map[string]*cacheItem)
+	c.ttl = 0
 	return c
 }
 
 type Cache struct {
-	mu     sync.RWMutex
-	ttl    time.Duration
-	ticker *time.Ticker
-	items  map[string]*item
+	mu    sync.RWMutex
+	items map[string]*cacheItem
+
+	ttlTimer *time.Timer
+	ttl      time.Duration
 }
 
 func (this *Cache) Get(key string) (value interface{}) {
-	this.mu.Lock()
-	defer this.mu.Unlock()
-
+	this.mu.RLock()
 	item, exists := this.items[key]
+	this.mu.RUnlock()
+
 	if exists == false {
 		return nil
 	}
-	if item.expired() {
-		delete(this.items, key)
+
+	if expired, _ := item.expired(time.Now()); expired {
 		return nil
 	}
-	item.touch(this.ttl)
+
+	item.touch()
 	return item.value
 }
 
-func (this *Cache) Set(key string, value interface{}) {
-	this.mu.Lock()
-	defer this.mu.Unlock()
+func (this *Cache) Set(key string, value interface{}, ttl time.Duration) {
+	var item = newCacheItem(value, ttl)
 
-	var item = newItem(value, this.ttl)
+	this.mu.Lock()
 	this.items[key] = item
+	this.mu.Unlock()
+
+	if item.ttl > 0 && (this.ttl == 0 || item.ttl < this.ttl) {
+		this.ttlCheck()
+	}
 }
 
 func (this *Cache) Del(key string) {
@@ -59,31 +61,34 @@ func (this *Cache) Count() int {
 	return len(this.items)
 }
 
-func (this *Cache) Close() error {
-	this.ticker.Stop()
-	this.items = nil
-	return nil
-}
-
-func (this *Cache) cleanup() {
+func (this *Cache) ttlCheck() {
 	this.mu.Lock()
 	defer this.mu.Unlock()
 
-	for key, item := range this.items {
-		if item.expired() {
-			delete(this.items, key)
-		}
+	if this.ttlTimer != nil {
+		this.ttlTimer.Stop()
 	}
-}
 
-func (this *Cache) run() {
-	this.ticker = time.NewTicker(this.ttl)
-	go func() {
-		for {
-			select {
-			case <-this.ticker.C:
-				this.cleanup()
+	var now = time.Now()
+	var nextTTL = time.Second * 0
+
+	for key, item := range this.items {
+		var expired, ttl = item.expired(now)
+		if ttl == 0 {
+			continue
+		}
+
+		if expired {
+			delete(this.items, key)
+		} else {
+			if nextTTL == 0 || ttl < nextTTL {
+				nextTTL = ttl
 			}
 		}
-	}()
+	}
+
+	this.ttl = nextTTL
+	if this.ttl > 0 {
+		this.ttlTimer = time.AfterFunc(this.ttl, this.ttlCheck)
+	}
 }
