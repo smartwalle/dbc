@@ -37,6 +37,13 @@ func (this *Cache) Get(key string) (value interface{}) {
 	return item.value
 }
 
+func (this *Cache) Exists(key string) (exists bool) {
+	this.mu.RLock()
+	_, exists = this.items[key]
+	this.mu.Unlock()
+	return exists
+}
+
 func (this *Cache) Set(key string, value interface{}, ttl time.Duration) {
 	var item = newCacheItem(value, ttl)
 
