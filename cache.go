@@ -40,7 +40,7 @@ func (this *Cache) Get(key string) (value interface{}) {
 func (this *Cache) Exists(key string) (exists bool) {
 	this.mu.RLock()
 	_, exists = this.items[key]
-	this.mu.Unlock()
+	this.mu.RUnlock()
 	return exists
 }
 
