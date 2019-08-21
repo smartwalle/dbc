@@ -58,19 +58,19 @@ func (this *Cache) Set(key string, value interface{}, ttl time.Duration) {
 
 func (this *Cache) Del(key string) {
 	this.mu.Lock()
-	defer this.mu.Unlock()
 	delete(this.items, key)
+	this.mu.Unlock()
 }
 
 func (this *Cache) Count() int {
 	this.mu.RLock()
-	defer this.mu.RUnlock()
-	return len(this.items)
+	var c = len(this.items)
+	this.mu.RUnlock()
+	return c
 }
 
 func (this *Cache) ttlCheck() {
 	this.mu.Lock()
-	defer this.mu.Unlock()
 
 	if this.ttlTimer != nil {
 		this.ttlTimer.Stop()
@@ -98,4 +98,5 @@ func (this *Cache) ttlCheck() {
 	if this.ttl > 0 {
 		this.ttlTimer = time.AfterFunc(this.ttl, this.ttlCheck)
 	}
+	this.mu.Unlock()
 }
