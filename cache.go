@@ -82,7 +82,7 @@ func (this *Cache) Set(key string, value interface{}, ttl time.Duration) {
 	if item != nil {
 		item.update(value, ttl)
 	} else {
-		item = newCacheItem(value, ttl)
+		item = newCacheItem(key, value, ttl)
 	}
 	this.items[key] = item
 	this.mu.Unlock()
@@ -148,6 +148,26 @@ func (this *Cache) ttlCheck() {
 		this.ttlTimer = time.AfterFunc(this.ttl, this.ttlCheck)
 	}
 	this.mu.Unlock()
+}
+
+func (this *Cache) Close() {
+	this.mu.Lock()
+	var items = make([]*cacheItem, 0, len(this.items))
+
+	if this.ttlTimer != nil {
+		this.ttlTimer.Stop()
+	}
+
+	for key, item := range this.items {
+		items = append(items, item)
+		delete(this.items, key)
+	}
+	this.items = nil
+	this.mu.Unlock()
+
+	for _, item := range items {
+		this.removedHandler(item.key, item.value)
+	}
 }
 
 func (this *Cache) OnRemovedItem(h HandlerFunc) {

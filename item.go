@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func newCacheItem(value interface{}, ttl time.Duration) *cacheItem {
+func newCacheItem(key string, value interface{}, ttl time.Duration) *cacheItem {
 	var now = time.Now()
 
 	if ttl < 0 {
@@ -21,6 +21,7 @@ func newCacheItem(value interface{}, ttl time.Duration) *cacheItem {
 
 type cacheItem struct {
 	mu    sync.RWMutex
+	key   string
 	value interface{}
 
 	ttl        time.Duration
