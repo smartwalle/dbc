@@ -5,19 +5,51 @@ import (
 	"time"
 )
 
-func NewCache() *Cache {
+const (
+	kDefaultSize = 1024
+)
+
+type Option interface {
+	Apply(*Cache)
+}
+
+type OptionFunc func(*Cache)
+
+func (f OptionFunc) Apply(c *Cache) {
+	f(c)
+}
+
+func WithDefaultSize(size int) Option {
+	return OptionFunc(func(c *Cache) {
+		c.defaultSize = size
+	})
+}
+
+type HandlerFunc func(key string, value interface{})
+
+func NewCache(opts ...Option) *Cache {
 	var c = &Cache{}
-	c.items = make(map[string]*cacheItem)
+	for _, opt := range opts {
+		opt.Apply(c)
+	}
+	if c.defaultSize <= 0 {
+		c.defaultSize = kDefaultSize
+	}
+	c.items = make(map[string]*cacheItem, c.defaultSize)
 	c.ttl = 0
 	return c
 }
 
 type Cache struct {
-	mu    sync.RWMutex
-	items map[string]*cacheItem
+	mu sync.RWMutex
+
+	defaultSize int
+	items       map[string]*cacheItem
 
 	ttlTimer *time.Timer
 	ttl      time.Duration
+
+	removedHandler HandlerFunc
 }
 
 func (this *Cache) Get(key string) (value interface{}) {
@@ -58,7 +90,15 @@ func (this *Cache) Set(key string, value interface{}, ttl time.Duration) {
 
 func (this *Cache) Del(key string) {
 	this.mu.Lock()
+	var item = this.items[key]
+	if item == nil {
+		this.mu.Unlock()
+		return
+	}
 	delete(this.items, key)
+	if this.removedHandler != nil {
+		this.removedHandler(key, item.value)
+	}
 	this.mu.Unlock()
 }
 
@@ -87,6 +127,11 @@ func (this *Cache) ttlCheck() {
 
 		if expired {
 			delete(this.items, key)
+			if this.removedHandler != nil {
+				this.mu.Unlock()
+				this.removedHandler(key, item.value)
+				this.mu.Lock()
+			}
 		} else {
 			if nextTTL == 0 || ttl < nextTTL {
 				nextTTL = ttl
@@ -98,5 +143,11 @@ func (this *Cache) ttlCheck() {
 	if this.ttl > 0 {
 		this.ttlTimer = time.AfterFunc(this.ttl, this.ttlCheck)
 	}
+	this.mu.Unlock()
+}
+
+func (this *Cache) OnRemovedItem(h HandlerFunc) {
+	this.mu.Lock()
+	this.removedHandler = h
 	this.mu.Unlock()
 }

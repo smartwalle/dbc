@@ -9,6 +9,9 @@ import (
 
 func TestNewCache(t *testing.T) {
 	var c = dbc.NewCache()
+	c.OnRemovedItem(func(key string, value interface{}) {
+		fmt.Println("OnRemovedItem", key, value)
+	})
 	c.Set("aa", "ccc", time.Second*5)
 	c.Set("ab", "ccc", time.Second*5)
 	c.Set("ac", "ccc", time.Second*5)
