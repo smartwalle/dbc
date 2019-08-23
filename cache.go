@@ -77,9 +77,13 @@ func (this *Cache) Exists(key string) (exists bool) {
 }
 
 func (this *Cache) Set(key string, value interface{}, ttl time.Duration) {
-	var item = newCacheItem(value, ttl)
-
 	this.mu.Lock()
+	var item = this.items[key]
+	if item != nil {
+		item.update(value, ttl)
+	} else {
+		item = newCacheItem(value, ttl)
+	}
 	this.items[key] = item
 	this.mu.Unlock()
 

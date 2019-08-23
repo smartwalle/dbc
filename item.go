@@ -34,6 +34,13 @@ func (this *cacheItem) touch() {
 	this.accessedOn = time.Now()
 }
 
+func (this *cacheItem) update(value interface{}, ttl time.Duration) {
+	this.mu.Lock()
+	this.value = value
+	this.ttl = ttl
+	this.mu.Unlock()
+}
+
 func (this *cacheItem) expired(now time.Time) (bool, time.Duration) {
 	this.mu.RLock()
 	var ttl = this.ttl
