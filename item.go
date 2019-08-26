@@ -13,6 +13,7 @@ func newCacheItem(key string, value interface{}, ttl time.Duration) *cacheItem {
 	}
 
 	var item = &cacheItem{}
+	item.key = key
 	item.value = value
 	item.ttl = ttl
 	item.accessedOn = now

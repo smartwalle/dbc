@@ -92,6 +92,24 @@ func (this *Cache) Set(key string, value interface{}, ttl time.Duration) {
 	}
 }
 
+func (this *Cache) SetNx(key string, value interface{}, ttl time.Duration) bool {
+	this.mu.Lock()
+	var _, exists = this.items[key]
+	if exists {
+		this.mu.Unlock()
+		return false
+	}
+
+	var item = newCacheItem(key, value, ttl)
+	this.items[key] = item
+	this.mu.Unlock()
+
+	if item.ttl > 0 && (this.ttl == 0 || item.ttl < this.ttl) {
+		this.ttlCheck()
+	}
+	return true
+}
+
 func (this *Cache) Del(key string) {
 	this.mu.Lock()
 	var item = this.items[key]
