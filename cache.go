@@ -9,28 +9,26 @@ const (
 	kDefaultSize = 1024
 )
 
-type Option interface {
-	Apply(*Cache)
-}
+type option func(*Cache)
 
-type OptionFunc func(*Cache)
+type removeHandler func(key string, value interface{})
 
-func (f OptionFunc) Apply(c *Cache) {
-	f(c)
-}
-
-func WithDefaultSize(size int) Option {
-	return OptionFunc(func(c *Cache) {
+func WithDefaultSize(size int) option {
+	return func(c *Cache) {
 		c.defaultSize = size
-	})
+	}
 }
 
-type HandlerFunc func(key string, value interface{})
+func WithRemoveHandler(handler removeHandler) option {
+	return func(c *Cache) {
+		c.removedItem = handler
+	}
+}
 
-func NewCache(opts ...Option) *Cache {
+func NewCache(opts ...option) *Cache {
 	var c = &Cache{}
 	for _, opt := range opts {
-		opt.Apply(c)
+		opt(c)
 	}
 	if c.defaultSize <= 0 {
 		c.defaultSize = kDefaultSize
@@ -49,7 +47,7 @@ type Cache struct {
 	ttlTimer *time.Timer
 	ttl      time.Duration
 
-	removedHandler HandlerFunc
+	removedItem removeHandler
 }
 
 func (this *Cache) Get(key string) (value interface{}) {
@@ -118,8 +116,8 @@ func (this *Cache) Del(key string) {
 		return
 	}
 	delete(this.items, key)
-	if this.removedHandler != nil {
-		this.removedHandler(key, item.value)
+	if this.removedItem != nil {
+		this.removedItem(key, item.value)
 	}
 	this.mu.Unlock()
 }
@@ -149,9 +147,9 @@ func (this *Cache) ttlCheck() {
 
 		if expired {
 			delete(this.items, key)
-			if this.removedHandler != nil {
+			if this.removedItem != nil {
 				this.mu.Unlock()
-				this.removedHandler(key, item.value)
+				this.removedItem(key, item.value)
 				this.mu.Lock()
 			}
 		} else {
@@ -170,6 +168,11 @@ func (this *Cache) ttlCheck() {
 
 func (this *Cache) Close() {
 	this.mu.Lock()
+	if len(this.items) == 0 {
+		this.mu.Unlock()
+		return
+	}
+
 	var items = make([]*cacheItem, 0, len(this.items))
 
 	if this.ttlTimer != nil {
@@ -180,16 +183,10 @@ func (this *Cache) Close() {
 		items = append(items, item)
 		delete(this.items, key)
 	}
-	this.items = nil
+	this.items = make(map[string]*cacheItem)
 	this.mu.Unlock()
 
 	for _, item := range items {
-		this.removedHandler(item.key, item.value)
+		this.removedItem(item.key, item.value)
 	}
-}
-
-func (this *Cache) OnRemovedItem(h HandlerFunc) {
-	this.mu.Lock()
-	this.removedHandler = h
-	this.mu.Unlock()
 }
