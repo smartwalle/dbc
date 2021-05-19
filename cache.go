@@ -21,22 +21,22 @@ type Cache interface {
 }
 
 type cacheWrapper struct {
-	*sharedCache
+	*cache
 }
 
 func stopJanitor(c *cacheWrapper) {
 	c.close()
 }
 
-type Option func(c *sharedCache)
+type Option func(c *cache)
 
 func WithCleanupInterval(interval time.Duration) Option {
-	return func(c *sharedCache) {
+	return func(c *cache) {
 		c.cleanupInterval = interval
 	}
 }
 
-type sharedCache struct {
+type cache struct {
 	cleanupInterval time.Duration
 	items           *nmap.Map
 	janitor         *Janitor
@@ -44,7 +44,7 @@ type sharedCache struct {
 }
 
 func New(opts ...Option) Cache {
-	var sc = &sharedCache{}
+	var sc = &cache{}
 	sc.items = nmap.New()
 	sc.cleanupInterval = 0
 
@@ -57,13 +57,13 @@ func New(opts ...Option) Cache {
 	sc.janitor = janitor
 
 	var c = &cacheWrapper{}
-	c.sharedCache = sc
+	c.cache = sc
 	runtime.SetFinalizer(c, stopJanitor)
 
 	return c
 }
 
-func (this *sharedCache) Tick() {
+func (this *cache) Tick() {
 	this.items.Range(func(key string, item nmap.Item) bool {
 		if item.Expired() {
 			this.Del(key)
@@ -72,15 +72,15 @@ func (this *sharedCache) Tick() {
 	})
 }
 
-func (this *sharedCache) close() {
+func (this *cache) close() {
 	this.janitor.close()
 }
 
-func (this *sharedCache) Set(key string, value interface{}) {
+func (this *cache) Set(key string, value interface{}) {
 	this.SetEx(key, value, 0)
 }
 
-func (this *sharedCache) SetEx(key string, value interface{}, expiration time.Duration) {
+func (this *cache) SetEx(key string, value interface{}, expiration time.Duration) {
 	var t int64
 	if expiration > 0 {
 		t = time.Now().Add(expiration).UnixNano()
@@ -89,11 +89,11 @@ func (this *sharedCache) SetEx(key string, value interface{}, expiration time.Du
 	this.items.Set(key, nItem)
 }
 
-func (this *sharedCache) Exists(key string) bool {
+func (this *cache) Exists(key string) bool {
 	return this.items.Exists(key)
 }
 
-func (this *sharedCache) Get(key string) interface{} {
+func (this *cache) Get(key string) interface{} {
 	var item, ok = this.items.Get(key)
 	if ok == false {
 		return nil
@@ -104,7 +104,7 @@ func (this *sharedCache) Get(key string) interface{} {
 	return item.Data()
 }
 
-func (this *sharedCache) Del(key string) {
+func (this *cache) Del(key string) {
 	if this.onEvicted != nil {
 		var item, ok = this.items.Get(key)
 		if ok {
@@ -114,6 +114,6 @@ func (this *sharedCache) Del(key string) {
 	this.items.Remove(key)
 }
 
-func (this *sharedCache) OnEvicted(f func(key string, value interface{})) {
+func (this *cache) OnEvicted(f func(key string, value interface{})) {
 	this.onEvicted = f
 }

@@ -16,7 +16,7 @@ func NewJanitor(interval time.Duration) *Janitor {
 	return j
 }
 
-func (this *Janitor) run(c *sharedCache) {
+func (this *Janitor) run(c *cache) {
 	if this.interval <= 0 {
 		return
 	}
