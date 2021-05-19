@@ -1,7 +1,7 @@
 package dbc
 
 import (
-	"github.com/smartwalle/nmap"
+	"github.com/smartwalle/dbc/nmap"
 	"runtime"
 	"time"
 )
@@ -64,9 +64,8 @@ func New(opts ...Option) Cache {
 }
 
 func (this *sharedCache) Tick() {
-	this.items.Range(func(key string, value interface{}) bool {
-		var item = value.(Item)
-		if item.expired() {
+	this.items.Range(func(key string, item nmap.Item) bool {
+		if item.Expired() {
 			this.Del(key)
 		}
 		return true
@@ -86,10 +85,7 @@ func (this *sharedCache) SetEx(key string, value interface{}, expiration time.Du
 	if expiration > 0 {
 		t = time.Now().Add(expiration).UnixNano()
 	}
-	var nItem = Item{
-		data:       value,
-		expiration: t,
-	}
+	var nItem = nmap.NewItem(value, t)
 	this.items.Set(key, nItem)
 }
 
@@ -98,22 +94,21 @@ func (this *sharedCache) Exists(key string) bool {
 }
 
 func (this *sharedCache) Get(key string) interface{} {
-	var value, ok = this.items.Get(key)
+	var item, ok = this.items.Get(key)
 	if ok == false {
 		return nil
 	}
-	var item = value.(Item)
-	if item.expired() {
+	if item.Expired() {
 		return nil
 	}
-	return item.data
+	return item.Data()
 }
 
 func (this *sharedCache) Del(key string) {
 	if this.onEvicted != nil {
-		var value, ok = this.items.Get(key)
+		var item, ok = this.items.Get(key)
 		if ok {
-			this.onEvicted(key, value.(Item).data)
+			this.onEvicted(key, item.Data())
 		}
 	}
 	this.items.Remove(key)
