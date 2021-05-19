@@ -24,3 +24,7 @@ func (this *Item) Expired() bool {
 func (this *Item) Data() interface{} {
 	return this.data
 }
+
+func (this *Item) UpdateExpiration(expiration int64) {
+	this.expiration = expiration
+}

@@ -83,14 +83,16 @@ func (this *Map) Set(key string, value Item) {
 	shard.Unlock()
 }
 
-func (this *Map) SetNx(key string, value Item) {
+func (this *Map) SetNx(key string, value Item) bool {
 	var shard = this.getShard(key)
 	shard.Lock()
 	var _, ok = shard.items[key]
 	if ok == false {
 		shard.items[key] = value
+		return true
 	}
 	shard.Unlock()
+	return false
 }
 
 func (this *Map) Get(key string) (Item, bool) {

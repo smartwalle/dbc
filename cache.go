@@ -11,6 +11,10 @@ type Cache interface {
 
 	SetEx(key string, value interface{}, expiration time.Duration)
 
+	SetNx(key string, value interface{}) bool
+
+	Expire(key string, expiration time.Duration)
+
 	Exists(key string) bool
 
 	Get(key string) interface{}
@@ -87,6 +91,23 @@ func (this *cache) SetEx(key string, value interface{}, expiration time.Duration
 	}
 	var nItem = nmap.NewItem(value, t)
 	this.items.Set(key, nItem)
+}
+
+func (this *cache) SetNx(key string, value interface{}) bool {
+	var nItem = nmap.NewItem(value, 0)
+	return this.items.SetNx(key, nItem)
+}
+
+func (this *cache) Expire(key string, expiration time.Duration) {
+	var item, ok = this.items.Get(key)
+	if ok {
+		var t int64
+		if expiration > 0 {
+			t = time.Now().Add(expiration).UnixNano()
+		}
+		item.UpdateExpiration(t)
+		this.items.Set(key, item)
+	}
 }
 
 func (this *cache) Exists(key string) bool {
