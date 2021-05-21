@@ -28,13 +28,9 @@ type cacheWrapper struct {
 	*cache
 }
 
-func stopJanitor(c *cacheWrapper) {
-	c.close()
-}
-
 type Option func(c *cache)
 
-func WithCleanupInterval(interval time.Duration) Option {
+func WithCleanup(interval time.Duration) Option {
 	return func(c *cache) {
 		c.cleanupInterval = interval
 	}
@@ -65,6 +61,10 @@ func New(opts ...Option) Cache {
 	runtime.SetFinalizer(c, stopJanitor)
 
 	return c
+}
+
+func stopJanitor(c *cacheWrapper) {
+	c.close()
 }
 
 func (this *cache) Tick() {
@@ -126,13 +126,10 @@ func (this *cache) Get(key string) interface{} {
 }
 
 func (this *cache) Del(key string) {
-	if this.onEvicted != nil {
-		var item, ok = this.items.Get(key)
-		if ok {
-			this.onEvicted(key, item.Data())
-		}
+	var item, ok = this.items.Pop(key)
+	if this.onEvicted != nil && ok {
+		this.onEvicted(key, item.Data())
 	}
-	this.items.Remove(key)
 }
 
 func (this *cache) OnEvicted(f func(key string, value interface{})) {
