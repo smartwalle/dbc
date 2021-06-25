@@ -17,7 +17,7 @@ type Cache interface {
 
 	Exists(key string) bool
 
-	Get(key string) interface{}
+	Get(key string) (interface{}, bool)
 
 	Del(key string)
 
@@ -114,15 +114,15 @@ func (this *cache) Exists(key string) bool {
 	return this.items.Exists(key)
 }
 
-func (this *cache) Get(key string) interface{} {
+func (this *cache) Get(key string) (interface{}, bool) {
 	var item, ok = this.items.Get(key)
 	if ok == false {
-		return nil
+		return nil, false
 	}
 	if item.Expired() {
-		return nil
+		return nil, false
 	}
-	return item.Data()
+	return item.Data(), true
 }
 
 func (this *cache) Del(key string) {
