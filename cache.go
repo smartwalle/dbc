@@ -81,7 +81,7 @@ func stopJanitor(c *cacheWrapper) {
 }
 
 func (this *cache) Tick() {
-	this.items.Range(func(key string, item *nmap.Item) bool {
+	this.items.Range(func(key string, item nmap.Item) bool {
 		if item.Expired() {
 			this.Del(key)
 		}
@@ -135,7 +135,12 @@ func (this *cache) Get(key string) (interface{}, bool) {
 	if item.Expired() {
 		return nil, false
 	}
-	item.Extend(this.hitTTL.Nanoseconds())
+
+	if this.hitTTL > 0 {
+		item.Extend(this.hitTTL.Nanoseconds())
+		this.items.Set(key, item)
+	}
+
 	return item.Data(), true
 }
 
@@ -147,7 +152,7 @@ func (this *cache) Del(key string) {
 }
 
 func (this *cache) Clear() {
-	this.items.Range(func(key string, value *nmap.Item) bool {
+	this.items.Range(func(key string, value nmap.Item) bool {
 		this.Del(key)
 		return true
 	})

@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	var cache = dbc.New(dbc.WithCleanup(time.Second))
+	var cache = dbc.New(dbc.WithCleanup(time.Second), dbc.WithHitTTL(time.Second*3))
 	cache.OnEvicted(func(key string, value interface{}) {
 		fmt.Println("Del", key, value)
 	})
