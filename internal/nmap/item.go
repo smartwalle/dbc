@@ -1,14 +1,16 @@
 package nmap
 
-import "time"
+import (
+	"time"
+)
 
 type Item struct {
 	data       interface{}
 	expiration int64
 }
 
-func NewItem(data interface{}, expiration int64) Item {
-	return Item{
+func NewItem(data interface{}, expiration int64) *Item {
+	return &Item{
 		data:       data,
 		expiration: expiration,
 	}
@@ -27,4 +29,8 @@ func (this *Item) Data() interface{} {
 
 func (this *Item) UpdateExpiration(expiration int64) {
 	this.expiration = expiration
+}
+
+func (this *Item) Extend(t int64) {
+	this.expiration += t
 }

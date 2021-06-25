@@ -1,7 +1,7 @@
 package dbc
 
 import (
-	"github.com/smartwalle/dbc/nmap"
+	"github.com/smartwalle/dbc/internal/nmap"
 	"runtime"
 	"time"
 )
@@ -21,6 +21,8 @@ type Cache interface {
 
 	Del(key string)
 
+	Clear()
+
 	OnEvicted(func(key string, value interface{}))
 }
 
@@ -36,8 +38,18 @@ func WithCleanup(interval time.Duration) Option {
 	}
 }
 
+func WithHitTTL(ttl time.Duration) Option {
+	return func(c *cache) {
+		if ttl < 0 {
+			ttl = 0
+		}
+		c.hitTTL = ttl
+	}
+}
+
 type cache struct {
 	cleanupInterval time.Duration
+	hitTTL          time.Duration
 	items           *nmap.Map
 	janitor         *Janitor
 	onEvicted       func(string, interface{})
@@ -47,6 +59,7 @@ func New(opts ...Option) Cache {
 	var sc = &cache{}
 	sc.items = nmap.New()
 	sc.cleanupInterval = 0
+	sc.hitTTL = 0
 
 	for _, opt := range opts {
 		opt(sc)
@@ -68,7 +81,7 @@ func stopJanitor(c *cacheWrapper) {
 }
 
 func (this *cache) Tick() {
-	this.items.Range(func(key string, item nmap.Item) bool {
+	this.items.Range(func(key string, item *nmap.Item) bool {
 		if item.Expired() {
 			this.Del(key)
 		}
@@ -122,6 +135,7 @@ func (this *cache) Get(key string) (interface{}, bool) {
 	if item.Expired() {
 		return nil, false
 	}
+	item.Extend(this.hitTTL.Nanoseconds())
 	return item.Data(), true
 }
 
@@ -130,6 +144,13 @@ func (this *cache) Del(key string) {
 	if this.onEvicted != nil && ok {
 		this.onEvicted(key, item.Data())
 	}
+}
+
+func (this *cache) Clear() {
+	this.items.Range(func(key string, value *nmap.Item) bool {
+		this.Del(key)
+		return true
+	})
 }
 
 func (this *cache) OnEvicted(f func(key string, value interface{})) {
