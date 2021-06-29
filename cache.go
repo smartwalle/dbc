@@ -21,6 +21,8 @@ type Cache interface {
 
 	Del(key string)
 
+	Range(f func(key string, value interface{}) bool)
+
 	Clear()
 
 	OnEvicted(func(key string, value interface{}))
@@ -149,6 +151,13 @@ func (this *cache) Del(key string) {
 	if this.onEvicted != nil && ok {
 		this.onEvicted(key, item.Data())
 	}
+}
+
+func (this *cache) Range(f func(key string, value interface{}) bool) {
+	this.items.Range(func(key string, value nmap.Item) bool {
+		f(key, value.Data())
+		return true
+	})
 }
 
 func (this *cache) Clear() {

@@ -32,5 +32,8 @@ func (this *Item) UpdateExpiration(expiration int64) {
 }
 
 func (this *Item) Extend(t int64) {
+	if this.expiration == 0 {
+		return
+	}
 	this.expiration += t
 }
