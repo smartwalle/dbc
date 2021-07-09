@@ -34,5 +34,5 @@ func (this *Janitor) run(c *cache) {
 }
 
 func (this *Janitor) close() {
-	this.stop <- true
+	close(this.stop)
 }
