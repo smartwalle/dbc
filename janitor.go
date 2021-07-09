@@ -12,7 +12,7 @@ type Janitor struct {
 func NewJanitor(interval time.Duration) *Janitor {
 	var j = &Janitor{}
 	j.interval = interval
-	j.stop = make(chan bool)
+	j.stop = make(chan bool, 1)
 	return j
 }
 
