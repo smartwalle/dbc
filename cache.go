@@ -80,7 +80,7 @@ func New(opts ...Option) Cache {
 
 func stopJanitor(c *cacheWrapper) {
 	c.close()
-	c.cache.items = nmap.New()
+	c.cache.items = nil
 	c.cache.janitor = nil
 	c.cache = nil
 }
