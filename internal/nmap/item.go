@@ -5,13 +5,13 @@ import (
 )
 
 type Item struct {
-	data       interface{}
+	value      interface{}
 	expiration int64
 }
 
 func NewItem(data interface{}, expiration int64) Item {
 	return Item{
-		data:       data,
+		value:      data,
 		expiration: expiration,
 	}
 }
@@ -23,8 +23,8 @@ func (this *Item) Expired() bool {
 	return time.Now().UnixNano() > this.expiration
 }
 
-func (this *Item) Data() interface{} {
-	return this.data
+func (this *Item) Value() interface{} {
+	return this.value
 }
 
 func (this *Item) UpdateExpiration(expiration int64) {

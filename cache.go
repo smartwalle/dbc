@@ -146,19 +146,19 @@ func (this *cache) Get(key string) (interface{}, bool) {
 		this.items.Set(key, item)
 	}
 
-	return item.Data(), true
+	return item.Value(), true
 }
 
 func (this *cache) Del(key string) {
 	var item, ok = this.items.Pop(key)
 	if this.onEvicted != nil && ok {
-		this.onEvicted(key, item.Data())
+		this.onEvicted(key, item.Value())
 	}
 }
 
 func (this *cache) Range(f func(key string, value interface{}) bool) {
 	this.items.Range(func(key string, value nmap.Item) bool {
-		f(key, value.Data())
+		f(key, value.Value())
 		return true
 	})
 }
