@@ -76,19 +76,19 @@ func (this *Map) getShard(key string) *shardMap {
 	return this.shards[index]
 }
 
-func (this *Map) Set(key string, value Item) {
+func (this *Map) Set(key string, item Item) {
 	var shard = this.getShard(key)
 	shard.Lock()
-	shard.items[key] = value
+	shard.items[key] = item
 	shard.Unlock()
 }
 
-func (this *Map) SetNx(key string, value Item) bool {
+func (this *Map) SetNx(key string, item Item) bool {
 	var shard = this.getShard(key)
 	shard.Lock()
 	var _, ok = shard.items[key]
 	if ok == false {
-		shard.items[key] = value
+		shard.items[key] = item
 		shard.Unlock()
 		return true
 	}
@@ -99,9 +99,9 @@ func (this *Map) SetNx(key string, value Item) bool {
 func (this *Map) Get(key string) (Item, bool) {
 	var shard = this.getShard(key)
 	shard.RLock()
-	var value, ok = shard.items[key]
+	var item, ok = shard.items[key]
 	shard.RUnlock()
-	return value, ok
+	return item, ok
 }
 
 func (this *Map) Exists(key string) bool {
@@ -131,10 +131,10 @@ func (this *Map) Remove(key string) {
 func (this *Map) Pop(key string) (Item, bool) {
 	var shard = this.getShard(key)
 	shard.Lock()
-	var value, ok = shard.items[key]
+	var item, ok = shard.items[key]
 	delete(shard.items, key)
 	shard.Unlock()
-	return value, ok
+	return item, ok
 }
 
 func (this *Map) Len() int {
@@ -148,7 +148,7 @@ func (this *Map) Len() int {
 	return count
 }
 
-func (this *Map) Range(f func(key string, value Item) bool) {
+func (this *Map) Range(f func(key string, item Item) bool) {
 	if f == nil {
 		return
 	}

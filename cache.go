@@ -157,14 +157,14 @@ func (this *cache) Del(key string) {
 }
 
 func (this *cache) Range(f func(key string, value interface{}) bool) {
-	this.items.Range(func(key string, value nmap.Item) bool {
-		f(key, value.Value())
+	this.items.Range(func(key string, item nmap.Item) bool {
+		f(key, item.Value())
 		return true
 	})
 }
 
 func (this *cache) Clear() {
-	this.items.Range(func(key string, value nmap.Item) bool {
+	this.items.Range(func(key string, item nmap.Item) bool {
 		this.Del(key)
 		return true
 	})
