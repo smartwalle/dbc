@@ -6,87 +6,93 @@ import (
 	"time"
 )
 
-type Cache interface {
-	Set(key string, value interface{})
+type Cache[T any] interface {
+	Set(key string, value T)
 
-	SetEx(key string, value interface{}, expiration time.Duration)
+	SetEx(key string, value T, expiration time.Duration)
 
-	SetNx(key string, value interface{}) bool
+	SetNx(key string, value T) bool
 
 	Expire(key string, expiration time.Duration)
 
 	Exists(key string) bool
 
-	Get(key string) (interface{}, bool)
+	Get(key string) (T, bool)
 
 	Del(key string)
 
-	Range(f func(key string, value interface{}) bool)
+	Range(f func(key string, value T) bool)
 
 	Clear()
 
-	OnEvicted(func(key string, value interface{}))
+	OnEvicted(func(key string, value T))
 }
 
-type cacheWrapper struct {
-	*cache
+type cacheWrapper[T any] struct {
+	*cache[T]
 }
 
-type Option func(c *cache)
+type Option func(c *option)
 
 func WithCleanup(interval time.Duration) Option {
-	return func(c *cache) {
-		c.cleanupInterval = interval
+	return func(opt *option) {
+		opt.cleanupInterval = interval
 	}
 }
 
 func WithHitTTL(ttl time.Duration) Option {
-	return func(c *cache) {
+	return func(opt *option) {
 		if ttl < 0 {
 			ttl = 0
 		}
-		c.hitTTL = ttl
+		opt.hitTTL = ttl
 	}
 }
 
-type cache struct {
+type option struct {
 	cleanupInterval time.Duration
 	hitTTL          time.Duration
-	items           *nmap.Map
-	janitor         *Janitor
-	onEvicted       func(string, interface{})
 }
 
-func New(opts ...Option) Cache {
-	var sc = &cache{}
-	sc.items = nmap.New()
-	sc.cleanupInterval = 0
-	sc.hitTTL = 0
+type cache[T any] struct {
+	*option
+	items     *nmap.Map[T]
+	janitor   *Janitor
+	onEvicted func(string, T)
+}
+
+func New[T any](opts ...Option) Cache[T] {
+	var nCache = &cache[T]{}
+	nCache.option = &option{
+		cleanupInterval: 0,
+		hitTTL:          0,
+	}
+	nCache.items = nmap.New[T]()
 
 	for _, opt := range opts {
-		opt(sc)
+		opt(nCache.option)
 	}
 
-	var janitor = NewJanitor(sc.cleanupInterval)
-	go janitor.run(sc)
-	sc.janitor = janitor
+	var janitor = NewJanitor(nCache.cleanupInterval)
+	go janitor.run(nCache)
+	nCache.janitor = janitor
 
-	var c = &cacheWrapper{}
-	c.cache = sc
-	runtime.SetFinalizer(c, stopJanitor)
+	var c = &cacheWrapper[T]{}
+	c.cache = nCache
+	runtime.SetFinalizer(c, stopJanitor[T])
 
 	return c
 }
 
-func stopJanitor(c *cacheWrapper) {
+func stopJanitor[T any](c *cacheWrapper[T]) {
 	c.cache.close()
 	c.cache.items = nil
 	c.cache.janitor = nil
 	c.cache = nil
 }
 
-func (this *cache) Tick() {
-	this.items.Range(func(key string, item nmap.Item) bool {
+func (this *cache[T]) Tick() {
+	this.items.Range(func(key string, item nmap.Item[T]) bool {
 		if item.Expired() {
 			this.Del(key)
 		}
@@ -94,29 +100,29 @@ func (this *cache) Tick() {
 	})
 }
 
-func (this *cache) close() {
+func (this *cache[T]) close() {
 	this.janitor.close()
 }
 
-func (this *cache) Set(key string, value interface{}) {
+func (this *cache[T]) Set(key string, value T) {
 	this.SetEx(key, value, 0)
 }
 
-func (this *cache) SetEx(key string, value interface{}, expiration time.Duration) {
+func (this *cache[T]) SetEx(key string, value T, expiration time.Duration) {
 	var t int64
 	if expiration > 0 {
 		t = time.Now().Add(expiration).UnixNano()
 	}
-	var nItem = nmap.NewItem(value, t)
+	var nItem = nmap.NewItem[T](value, t)
 	this.items.Set(key, nItem)
 }
 
-func (this *cache) SetNx(key string, value interface{}) bool {
+func (this *cache[T]) SetNx(key string, value T) bool {
 	var nItem = nmap.NewItem(value, 0)
 	return this.items.SetNx(key, nItem)
 }
 
-func (this *cache) Expire(key string, expiration time.Duration) {
+func (this *cache[T]) Expire(key string, expiration time.Duration) {
 	var item, ok = this.items.Get(key)
 	if ok {
 		var t int64
@@ -128,48 +134,51 @@ func (this *cache) Expire(key string, expiration time.Duration) {
 	}
 }
 
-func (this *cache) Exists(key string) bool {
+func (this *cache[T]) Exists(key string) bool {
 	return this.items.Exists(key)
 }
 
-func (this *cache) Get(key string) (interface{}, bool) {
+func (this *cache[T]) Get(key string) (T, bool) {
 	var item, ok = this.items.Get(key)
+
+	var value T
+
 	if ok == false {
-		return nil, false
+		return value, false
 	}
 	if item.Expired() {
-		return nil, false
+		return value, false
 	}
 
 	if this.hitTTL > 0 {
 		item.Extend(this.hitTTL.Nanoseconds())
 		this.items.Set(key, item)
 	}
-
-	return item.Value(), true
+	value = item.Value()
+	return value, true
 }
 
-func (this *cache) Del(key string) {
+func (this *cache[T]) Del(key string) {
 	var item, ok = this.items.Pop(key)
 	if this.onEvicted != nil && ok {
 		this.onEvicted(key, item.Value())
 	}
 }
 
-func (this *cache) Range(f func(key string, value interface{}) bool) {
-	this.items.Range(func(key string, item nmap.Item) bool {
+func (this *cache[T]) Range(f func(key string, value T) bool) {
+	this.items.Range(func(key string, item nmap.Item[T]) bool {
 		f(key, item.Value())
 		return true
 	})
 }
 
-func (this *cache) Clear() {
-	this.items.Range(func(key string, item nmap.Item) bool {
+func (this *cache[T]) Clear() {
+	this.items.Range(func(key string, item nmap.Item[T]) bool {
 		this.Del(key)
 		return true
 	})
 }
 
-func (this *cache) OnEvicted(f func(key string, value interface{})) {
+func (this *cache[T]) OnEvicted(f func(key string, value T)) {
 	this.onEvicted = f
 }

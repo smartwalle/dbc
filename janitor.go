@@ -16,7 +16,7 @@ func NewJanitor(interval time.Duration) *Janitor {
 	return j
 }
 
-func (this *Janitor) run(c *cache) {
+func (this *Janitor) run(t Ticker) {
 	if this.interval <= 0 {
 		return
 	}
@@ -25,7 +25,7 @@ func (this *Janitor) run(c *cache) {
 	for {
 		select {
 		case <-ticker.C:
-			c.Tick()
+			t.Tick()
 		case <-this.stop:
 			ticker.Stop()
 			return
@@ -35,4 +35,8 @@ func (this *Janitor) run(c *cache) {
 
 func (this *Janitor) close() {
 	close(this.stop)
+}
+
+type Ticker interface {
+	Tick()
 }
