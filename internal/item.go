@@ -1,4 +1,4 @@
-package nmap
+package internal
 
 import (
 	"time"

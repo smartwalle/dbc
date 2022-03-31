@@ -1,4 +1,4 @@
-package dbc
+package internal
 
 import (
 	"time"
@@ -16,7 +16,7 @@ func NewJanitor(interval time.Duration) *Janitor {
 	return j
 }
 
-func (this *Janitor) run(t Ticker) {
+func (this *Janitor) Run(handler JanitorHandler) {
 	if this.interval <= 0 {
 		return
 	}
@@ -25,7 +25,7 @@ func (this *Janitor) run(t Ticker) {
 	for {
 		select {
 		case <-ticker.C:
-			t.Tick()
+			handler.OnTick()
 		case <-this.stop:
 			ticker.Stop()
 			return
@@ -33,10 +33,10 @@ func (this *Janitor) run(t Ticker) {
 	}
 }
 
-func (this *Janitor) close() {
+func (this *Janitor) Close() {
 	close(this.stop)
 }
 
-type Ticker interface {
-	Tick()
+type JanitorHandler interface {
+	OnTick()
 }

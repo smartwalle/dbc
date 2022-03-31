@@ -1,7 +1,8 @@
 package dbc
 
 import (
-	"github.com/smartwalle/dbc/internal/nmap"
+	"github.com/smartwalle/dbc/internal"
+	"github.com/smartwalle/nmap"
 	"runtime"
 	"time"
 )
@@ -56,8 +57,8 @@ type option struct {
 
 type cache[T any] struct {
 	*option
-	items     *nmap.Map[T]
-	janitor   *Janitor
+	items     *nmap.Map[internal.Item[T]]
+	janitor   *internal.Janitor
 	onEvicted func(string, T)
 }
 
@@ -67,14 +68,14 @@ func New[T any](opts ...Option) Cache[T] {
 		cleanupInterval: 0,
 		hitTTL:          0,
 	}
-	nCache.items = nmap.New[T]()
+	nCache.items = nmap.New[internal.Item[T]]()
 
 	for _, opt := range opts {
 		opt(nCache.option)
 	}
 
-	var janitor = NewJanitor(nCache.cleanupInterval)
-	go janitor.run(nCache)
+	var janitor = internal.NewJanitor(nCache.cleanupInterval)
+	go janitor.Run(nCache)
 	nCache.janitor = janitor
 
 	var c = &cacheWrapper[T]{}
@@ -91,8 +92,8 @@ func stopJanitor[T any](c *cacheWrapper[T]) {
 	c.cache = nil
 }
 
-func (this *cache[T]) Tick() {
-	this.items.Range(func(key string, item nmap.Item[T]) bool {
+func (this *cache[T]) OnTick() {
+	this.items.Range(func(key string, item internal.Item[T]) bool {
 		if item.Expired() {
 			this.Del(key)
 		}
@@ -101,7 +102,7 @@ func (this *cache[T]) Tick() {
 }
 
 func (this *cache[T]) close() {
-	this.janitor.close()
+	this.janitor.Close()
 }
 
 func (this *cache[T]) Set(key string, value T) {
@@ -113,12 +114,12 @@ func (this *cache[T]) SetEx(key string, value T, expiration time.Duration) {
 	if expiration > 0 {
 		t = time.Now().Add(expiration).UnixNano()
 	}
-	var nItem = nmap.NewItem[T](value, t)
+	var nItem = internal.NewItem[T](value, t)
 	this.items.Set(key, nItem)
 }
 
 func (this *cache[T]) SetNx(key string, value T) bool {
-	var nItem = nmap.NewItem(value, 0)
+	var nItem = internal.NewItem[T](value, 0)
 	return this.items.SetNx(key, nItem)
 }
 
@@ -166,14 +167,14 @@ func (this *cache[T]) Del(key string) {
 }
 
 func (this *cache[T]) Range(f func(key string, value T) bool) {
-	this.items.Range(func(key string, item nmap.Item[T]) bool {
+	this.items.Range(func(key string, item internal.Item[T]) bool {
 		f(key, item.Value())
 		return true
 	})
 }
 
 func (this *cache[T]) Clear() {
-	this.items.Range(func(key string, item nmap.Item[T]) bool {
+	this.items.Range(func(key string, item internal.Item[T]) bool {
 		this.Del(key)
 		return true
 	})
