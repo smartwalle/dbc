@@ -11,42 +11,60 @@ const (
 	kShardCount = uint32(32)
 )
 
-type Option func(p *Map)
+type Option func(opt *option)
 
 func WithShardCount(count uint32) Option {
-	return func(m *Map) {
-		m.shard = count
+	return func(opt *option) {
+		opt.shard = count
 	}
 }
 
 func WithFNVHash() Option {
-	return func(m *Map) {
-		m.hashSeed = kFNVSeed
-		m.hash = FNV1
+	return func(opt *option) {
+		opt.hashSeed = kFNVSeed
+		opt.hash = FNV1
 	}
 }
 
 func WithBKDRHash() Option {
-	return func(m *Map) {
-		m.hashSeed = kBKDRSeed
-		m.hash = BKDR
+	return func(opt *option) {
+		opt.hashSeed = kBKDRSeed
+		opt.hash = BKDR
 	}
 }
 
 func WithDJBHash() Option {
-	return func(m *Map) {
-		m.hashSeed = rand.Uint32()
-		m.hash = DJB
+	return func(opt *option) {
+		opt.hashSeed = rand.Uint32()
+		opt.hash = DJB
 	}
+}
+
+type option struct {
+	hashSeed uint32
+	hash     Hash
+	shard    uint32
+}
+
+type Map struct {
+	*option
+	shards []*shardMap
+}
+
+type shardMap struct {
+	*sync.RWMutex
+	items map[string]Item
 }
 
 func New(opts ...Option) *Map {
 	var m = &Map{}
+	m.option = &option{}
+
 	for _, opt := range opts {
-		opt(m)
+		opt(m.option)
 	}
 	if m.hash == nil {
-		WithDJBHash()(m)
+		WithDJBHash()(m.option)
 	}
 	if m.shard == 0 {
 		m.shard = kShardCount
@@ -57,18 +75,6 @@ func New(opts ...Option) *Map {
 		m.shards[i] = &shardMap{RWMutex: &sync.RWMutex{}, items: make(map[string]Item)}
 	}
 	return m
-}
-
-type Map struct {
-	hashSeed uint32
-	hash     Hash
-	shard    uint32
-	shards   []*shardMap
-}
-
-type shardMap struct {
-	*sync.RWMutex
-	items map[string]Item
 }
 
 func (this *Map) getShard(key string) *shardMap {

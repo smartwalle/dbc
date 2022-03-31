@@ -33,50 +33,55 @@ type cacheWrapper struct {
 	*cache
 }
 
-type Option func(c *cache)
+type Option func(c *option)
 
 func WithCleanup(interval time.Duration) Option {
-	return func(c *cache) {
-		c.cleanupInterval = interval
+	return func(opt *option) {
+		opt.cleanupInterval = interval
 	}
 }
 
 func WithHitTTL(ttl time.Duration) Option {
-	return func(c *cache) {
+	return func(opt *option) {
 		if ttl < 0 {
 			ttl = 0
 		}
-		c.hitTTL = ttl
+		opt.hitTTL = ttl
 	}
+}
+
+type option struct {
+	cleanupInterval time.Duration
+	hitTTL          time.Duration
 }
 
 type cache struct {
-	cleanupInterval time.Duration
-	hitTTL          time.Duration
-	items           *nmap.Map
-	janitor         *internal.Janitor
-	onEvicted       func(string, interface{})
+	*option
+	items     *nmap.Map
+	janitor   *internal.Janitor
+	onEvicted func(string, interface{})
 }
 
 func New(opts ...Option) Cache {
-	var sc = &cache{}
-	sc.items = nmap.New()
-	sc.cleanupInterval = 0
-	sc.hitTTL = 0
+	var nCache = &cache{}
+	nCache.option = &option{}
+	nCache.items = nmap.New()
+	nCache.cleanupInterval = 0
+	nCache.hitTTL = 0
 
 	for _, opt := range opts {
-		opt(sc)
+		opt(nCache.option)
 	}
 
-	var janitor = internal.NewJanitor(sc.cleanupInterval)
-	go janitor.Run(sc)
-	sc.janitor = janitor
+	var janitor = internal.NewJanitor(nCache.cleanupInterval)
+	go janitor.Run(nCache)
+	nCache.janitor = janitor
 
-	var c = &cacheWrapper{}
-	c.cache = sc
-	runtime.SetFinalizer(c, stopJanitor)
+	var wrapper = &cacheWrapper{}
+	wrapper.cache = nCache
+	runtime.SetFinalizer(wrapper, stopJanitor)
 
-	return c
+	return wrapper
 }
 
 func stopJanitor(c *cacheWrapper) {
