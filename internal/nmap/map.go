@@ -197,3 +197,29 @@ func (this *Map) Keys() []string {
 	}
 	return nKeys
 }
+
+func (this *Map) DeleteExpired(evicted bool) []EvictedItem {
+	var evictedItems []EvictedItem
+
+	for i := uint32(0); i < this.shard; i++ {
+		var shard = this.shards[i]
+		shard.Lock()
+		for k, v := range shard.items {
+			if v.Expired() {
+				delete(shard.items, k)
+
+				if evicted {
+					evictedItems = append(evictedItems, EvictedItem{k, v})
+				}
+			}
+		}
+		shard.Unlock()
+	}
+
+	return evictedItems
+}
+
+type EvictedItem struct {
+	Key   string
+	Value interface{}
+}

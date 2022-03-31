@@ -92,12 +92,11 @@ func stopJanitor(c *cacheWrapper) {
 }
 
 func (this *cache) OnTick() {
-	this.items.Range(func(key string, item nmap.Item) bool {
-		if item.Expired() {
-			this.Del(key)
-		}
-		return true
-	})
+	var evictedItems = this.items.DeleteExpired(this.onEvicted != nil)
+
+	for _, item := range evictedItems {
+		this.onEvicted(item.Key, item.Value)
+	}
 }
 
 func (this *cache) close() {
@@ -164,6 +163,9 @@ func (this *cache) Del(key string) {
 
 func (this *cache) Range(f func(key string, value interface{}) bool) {
 	this.items.Range(func(key string, item nmap.Item) bool {
+		if item.Expired() {
+			return true
+		}
 		f(key, item.Value())
 		return true
 	})
