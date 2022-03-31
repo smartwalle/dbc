@@ -16,7 +16,7 @@ func NewJanitor(interval time.Duration) *Janitor {
 	return j
 }
 
-func (this *Janitor) Run(t JanitorHandler) {
+func (this *Janitor) Run(handler JanitorHandler) {
 	if this.interval <= 0 {
 		return
 	}
@@ -25,7 +25,7 @@ func (this *Janitor) Run(t JanitorHandler) {
 	for {
 		select {
 		case <-ticker.C:
-			t.OnTick()
+			handler.OnTick()
 		case <-this.stop:
 			ticker.Stop()
 			return
