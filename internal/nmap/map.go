@@ -53,7 +53,7 @@ type Map struct {
 
 type shardMap struct {
 	*sync.RWMutex
-	items map[string]Item
+	items map[string]*Item
 }
 
 func New(opts ...Option) *Map {
@@ -72,7 +72,7 @@ func New(opts ...Option) *Map {
 
 	m.shards = make([]*shardMap, m.shard)
 	for i := uint32(0); i < m.shard; i++ {
-		m.shards[i] = &shardMap{RWMutex: &sync.RWMutex{}, items: make(map[string]Item)}
+		m.shards[i] = &shardMap{RWMutex: &sync.RWMutex{}, items: make(map[string]*Item)}
 	}
 	return m
 }
@@ -82,14 +82,14 @@ func (this *Map) getShard(key string) *shardMap {
 	return this.shards[index]
 }
 
-func (this *Map) Set(key string, item Item) {
+func (this *Map) Set(key string, item *Item) {
 	var shard = this.getShard(key)
 	shard.Lock()
 	shard.items[key] = item
 	shard.Unlock()
 }
 
-func (this *Map) SetNx(key string, item Item) bool {
+func (this *Map) SetNx(key string, item *Item) bool {
 	var shard = this.getShard(key)
 	shard.Lock()
 	var _, ok = shard.items[key]
@@ -102,7 +102,7 @@ func (this *Map) SetNx(key string, item Item) bool {
 	return false
 }
 
-func (this *Map) Get(key string) (Item, bool) {
+func (this *Map) Get(key string) (*Item, bool) {
 	var shard = this.getShard(key)
 	shard.RLock()
 	var item, ok = shard.items[key]
@@ -122,7 +122,7 @@ func (this *Map) RemoveAll() {
 	for i := uint32(0); i < this.shard; i++ {
 		var shard = this.shards[i]
 		shard.Lock()
-		shard.items = make(map[string]Item)
+		shard.items = make(map[string]*Item)
 		shard.Unlock()
 	}
 }
@@ -134,7 +134,7 @@ func (this *Map) Remove(key string) {
 	shard.Unlock()
 }
 
-func (this *Map) Pop(key string) (Item, bool) {
+func (this *Map) Pop(key string) (*Item, bool) {
 	var shard = this.getShard(key)
 	shard.Lock()
 	var item, ok = shard.items[key]
@@ -154,7 +154,7 @@ func (this *Map) Len() int {
 	return count
 }
 
-func (this *Map) Range(f func(key string, item Item) bool) {
+func (this *Map) Range(f func(key string, item *Item) bool) {
 	if f == nil {
 		return
 	}
@@ -172,8 +172,8 @@ func (this *Map) Range(f func(key string, item Item) bool) {
 	}
 }
 
-func (this *Map) Items() map[string]Item {
-	var nMap = make(map[string]Item, this.Len())
+func (this *Map) Items() map[string]*Item {
+	var nMap = make(map[string]*Item, this.Len())
 	for i := uint32(0); i < this.shard; i++ {
 		var shard = this.shards[i]
 		shard.RLock()

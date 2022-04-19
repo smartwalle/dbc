@@ -9,8 +9,8 @@ type Item struct {
 	expiration int64
 }
 
-func NewItem(value interface{}, expiration int64) Item {
-	return Item{
+func NewItem(value interface{}, expiration int64) *Item {
+	return &Item{
 		value:      value,
 		expiration: expiration,
 	}
