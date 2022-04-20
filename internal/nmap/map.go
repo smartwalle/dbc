@@ -77,6 +77,16 @@ func New(opts ...Option) *Map {
 	return m
 }
 
+func (this *Map) Lock(key string) {
+	var shard = this.getShard(key)
+	shard.Lock()
+}
+
+func (this *Map) Unlock(key string) {
+	var shard = this.getShard(key)
+	shard.Unlock()
+}
+
 func (this *Map) getShard(key string) *shardMap {
 	var index = this.hash(this.hashSeed, key) % this.shard
 	return this.shards[index]

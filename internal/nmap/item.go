@@ -22,6 +22,10 @@ func (this *Item) Value() interface{} {
 	return this.value
 }
 
+func (this *Item) UpdateValue(value interface{}) {
+	this.value = value
+}
+
 func (this *Item) Expiration() int64 {
 	return this.expiration
 }

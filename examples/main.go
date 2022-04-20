@@ -15,7 +15,7 @@ func main() {
 	cache.Set("k1", "v1")
 	cache.Set("k2", "v2")
 
-	cache.SetEx("kk1", "vv1", time.Now().Add(time.Second*2).Unix())
+	cache.SetEx("kk1", "vv1", 0)
 	cache.SetEx("kk2", "vv2", time.Now().Add(time.Second*2).Unix())
 	//
 	//fmt.Println(cache.Get("k1"))
@@ -24,6 +24,7 @@ func main() {
 
 	for {
 		fmt.Println(cache.Get("kk1"))
+		cache.Expire("kk1", time.Now().Add(time.Second*5).Unix())
 		time.Sleep(time.Second)
 	}
 

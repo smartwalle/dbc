@@ -91,7 +91,9 @@ func (this *cache) run() {
 		if this.checkExpired(item) {
 			this.Del(item.Key())
 		} else {
-			this.delayQueue.Enqueue(item, item.Expiration())
+			if item.Expiration() > 0 {
+				this.delayQueue.Enqueue(item, item.Expiration())
+			}
 		}
 	}
 }
@@ -105,11 +107,25 @@ func (this *cache) Set(key string, value interface{}) {
 }
 
 func (this *cache) SetEx(key string, value interface{}, expiration int64) {
-	var nItem = nmap.NewItem(key, value, expiration)
-	this.items.Set(key, nItem)
+	var item, _ = this.items.Get(key)
 
-	if expiration > 0 {
-		this.delayQueue.Enqueue(nItem, expiration)
+	if item == nil {
+		item = nmap.NewItem(key, value, expiration)
+		this.items.Set(key, item)
+
+		if expiration > 0 {
+			this.delayQueue.Enqueue(item, expiration)
+		}
+	} else {
+		var remain = item.Expiration() - this.delayQueue.Now()
+
+		item.UpdateValue(value)
+		item.UpdateExpiration(expiration)
+
+		if expiration > 0 && remain < 3 {
+			this.items.Set(key, item)
+			this.delayQueue.Enqueue(item, expiration)
+		}
 	}
 }
 
@@ -121,10 +137,12 @@ func (this *cache) SetNx(key string, value interface{}) bool {
 func (this *cache) Expire(key string, expiration int64) {
 	var item, ok = this.items.Get(key)
 	if ok {
-		item.UpdateExpiration(expiration)
-		this.items.Set(key, item)
+		var remain = item.Expiration() - this.delayQueue.Now()
 
-		if expiration > 0 {
+		item.UpdateExpiration(expiration)
+
+		if expiration > 0 && remain < 3 {
+			this.items.Set(key, item)
 			this.delayQueue.Enqueue(item, expiration)
 		}
 	}
