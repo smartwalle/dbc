@@ -51,7 +51,9 @@ func New(opts ...Option) Cache {
 	nCache.items = nmap.New()
 
 	for _, opt := range opts {
-		opt(nCache.option)
+		if opt != nil {
+			opt(nCache.option)
+		}
 	}
 
 	nCache.delayQueue = delay.New(
