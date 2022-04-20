@@ -35,17 +35,7 @@ type cacheWrapper struct {
 
 type Option func(c *option)
 
-func WithHitTTL(second int64) Option {
-	return func(opt *option) {
-		if second < 0 {
-			second = 0
-		}
-		opt.hitTTL = second
-	}
-}
-
 type option struct {
-	hitTTL int64
 }
 
 type cache struct {
@@ -59,7 +49,6 @@ func New(opts ...Option) Cache {
 	var nCache = &cache{}
 	nCache.option = &option{}
 	nCache.items = nmap.New()
-	nCache.hitTTL = 0
 
 	for _, opt := range opts {
 		opt(nCache.option)
@@ -154,15 +143,6 @@ func (this *cache) Get(key string) (interface{}, bool) {
 		return nil, false
 	}
 
-	if this.hitTTL > 0 {
-		var expiration = item.Extend(this.hitTTL)
-		this.items.Set(key, item)
-
-		if expiration > 0 {
-			this.delayQueue.Enqueue(item, expiration)
-		}
-	}
-
 	return item.Value(), true
 }
 
@@ -200,5 +180,5 @@ func (this *cache) checkExpired(item *nmap.Item) bool {
 	if expiration == 0 {
 		return false
 	}
-	return this.delayQueue.Now() > expiration
+	return this.delayQueue.Now() >= expiration
 }
