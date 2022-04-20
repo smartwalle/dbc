@@ -1,39 +1,39 @@
 package nmap
 
-import (
-	"time"
-)
-
 type Item struct {
+	key        string
 	value      interface{}
 	expiration int64
 }
 
-func NewItem(value interface{}, expiration int64) *Item {
+func NewItem(key string, value interface{}, expiration int64) *Item {
 	return &Item{
+		key:        key,
 		value:      value,
 		expiration: expiration,
 	}
 }
 
-func (this *Item) Expired() bool {
-	if this.expiration == 0 {
-		return false
-	}
-	return time.Now().UnixNano() > this.expiration
+func (this *Item) Key() string {
+	return this.key
 }
 
 func (this *Item) Value() interface{} {
 	return this.value
 }
 
+func (this *Item) Expiration() int64 {
+	return this.expiration
+}
+
 func (this *Item) UpdateExpiration(expiration int64) {
 	this.expiration = expiration
 }
 
-func (this *Item) Extend(t int64) {
+func (this *Item) Extend(t int64) int64 {
 	if this.expiration == 0 {
-		return
+		return 0
 	}
 	this.expiration += t
+	return this.expiration
 }

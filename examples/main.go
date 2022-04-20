@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	var cache = dbc.New(dbc.WithCleanup(time.Second), dbc.WithHitTTL(time.Second*3))
+	var cache = dbc.New(dbc.WithHitTTL(10))
 	cache.OnEvicted(func(key string, value interface{}) {
 		fmt.Println("Del", key, value)
 	})
@@ -15,8 +15,8 @@ func main() {
 	cache.Set("k1", "v1")
 	cache.Set("k2", "v2")
 
-	cache.SetEx("kk1", "vv1", time.Second*2)
-	cache.SetEx("kk2", "vv2", time.Second*1)
+	cache.SetEx("kk1", "vv1", time.Now().Add(time.Second*2).Unix())
+	cache.SetEx("kk2", "vv2", time.Now().Add(time.Second*2).Unix())
 	//
 	//fmt.Println(cache.Get("k1"))
 	//fmt.Println(cache.Get("k2"))
