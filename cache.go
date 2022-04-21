@@ -91,13 +91,36 @@ func (this *cache) run() {
 			return
 		}
 
-		if this.checkExpired(item) {
-			this.Del(item.Key())
-		} else {
-			if item.Expiration() > 0 {
-				this.delayQueue.Enqueue(item, item.Expiration())
+		//if this.checkExpired(item) {
+		//	this.Del(item.Key())
+		//} else {
+		//	if item.Expiration() > 0 {
+		//		this.delayQueue.Enqueue(item, item.Expiration())
+		//	}
+		//}
+
+		var key = item.Key()
+
+		this.maps.GetShard(key).Do(func(mu *sync.RWMutex, items map[string]*nmap.Item) {
+			mu.Lock()
+
+			if this.checkExpired(item) {
+				var _, ok = items[key]
+				if ok {
+					delete(items, key)
+				}
+				mu.Unlock()
+
+				if ok && this.onEvicted != nil {
+					this.onEvicted(key, item.Value())
+				}
+			} else {
+				if item.Expiration() > 0 {
+					this.delayQueue.Enqueue(item, item.Expiration())
+				}
+				mu.Unlock()
 			}
-		}
+		})
 	}
 }
 
@@ -206,7 +229,7 @@ func (this *cache) Get(key string) (interface{}, bool) {
 
 func (this *cache) Del(key string) {
 	var item, ok = this.maps.Pop(key)
-	if this.onEvicted != nil && ok {
+	if ok && this.onEvicted != nil {
 		this.onEvicted(key, item.Value())
 	}
 }
