@@ -56,6 +56,12 @@ type shardMap struct {
 	items map[string]*Item
 }
 
+func (this *shardMap) Do(f func(mu *sync.RWMutex, items map[string]*Item)) {
+	if f != nil {
+		f(this.RWMutex, this.items)
+	}
+}
+
 func New(opts ...Option) *Map {
 	var m = &Map{}
 	m.option = &option{}
@@ -77,30 +83,20 @@ func New(opts ...Option) *Map {
 	return m
 }
 
-func (this *Map) Lock(key string) {
-	var shard = this.getShard(key)
-	shard.Lock()
-}
-
-func (this *Map) Unlock(key string) {
-	var shard = this.getShard(key)
-	shard.Unlock()
-}
-
-func (this *Map) getShard(key string) *shardMap {
+func (this *Map) GetShard(key string) *shardMap {
 	var index = this.hash(this.hashSeed, key) % this.shard
 	return this.shards[index]
 }
 
 func (this *Map) Set(key string, item *Item) {
-	var shard = this.getShard(key)
+	var shard = this.GetShard(key)
 	shard.Lock()
 	shard.items[key] = item
 	shard.Unlock()
 }
 
 func (this *Map) SetNx(key string, item *Item) bool {
-	var shard = this.getShard(key)
+	var shard = this.GetShard(key)
 	shard.Lock()
 	var _, ok = shard.items[key]
 	if ok == false {
@@ -113,7 +109,7 @@ func (this *Map) SetNx(key string, item *Item) bool {
 }
 
 func (this *Map) Get(key string) (*Item, bool) {
-	var shard = this.getShard(key)
+	var shard = this.GetShard(key)
 	shard.RLock()
 	var item, ok = shard.items[key]
 	shard.RUnlock()
@@ -121,7 +117,7 @@ func (this *Map) Get(key string) (*Item, bool) {
 }
 
 func (this *Map) Exists(key string) bool {
-	var shard = this.getShard(key)
+	var shard = this.GetShard(key)
 	shard.RLock()
 	var _, ok = shard.items[key]
 	shard.RUnlock()
@@ -138,14 +134,14 @@ func (this *Map) RemoveAll() {
 }
 
 func (this *Map) Remove(key string) {
-	var shard = this.getShard(key)
+	var shard = this.GetShard(key)
 	shard.Lock()
 	delete(shard.items, key)
 	shard.Unlock()
 }
 
 func (this *Map) Pop(key string) (*Item, bool) {
-	var shard = this.getShard(key)
+	var shard = this.GetShard(key)
 	shard.Lock()
 	var item, ok = shard.items[key]
 	delete(shard.items, key)

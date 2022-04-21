@@ -4,6 +4,7 @@ import (
 	"github.com/smartwalle/dbc/internal/nmap"
 	"github.com/smartwalle/queue/delay"
 	"runtime"
+	"sync"
 	"time"
 )
 
@@ -40,7 +41,7 @@ type option struct {
 
 type cache struct {
 	*option
-	items      *nmap.Map
+	maps       *nmap.Map
 	delayQueue delay.Queue
 	onEvicted  func(string, interface{})
 }
@@ -48,7 +49,7 @@ type cache struct {
 func New(opts ...Option) Cache {
 	var nCache = &cache{}
 	nCache.option = &option{}
-	nCache.items = nmap.New()
+	nCache.maps = nmap.New()
 
 	for _, opt := range opts {
 		if opt != nil {
@@ -66,14 +67,14 @@ func New(opts ...Option) Cache {
 
 	var wrapper = &cacheWrapper{}
 	wrapper.cache = nCache
-	runtime.SetFinalizer(wrapper, stopJanitor)
+	runtime.SetFinalizer(wrapper, stop)
 
 	return wrapper
 }
 
-func stopJanitor(c *cacheWrapper) {
+func stop(c *cacheWrapper) {
 	c.cache.close()
-	c.cache.items = nil
+	c.cache.maps = nil
 	c.cache = nil
 }
 
@@ -109,53 +110,90 @@ func (this *cache) Set(key string, value interface{}) {
 }
 
 func (this *cache) SetEx(key string, value interface{}, expiration int64) {
-	var item, _ = this.items.Get(key)
+	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, items map[string]*nmap.Item) {
+		mu.Lock()
+		var item, _ = items[key]
 
-	if item == nil {
-		item = nmap.NewItem(key, value, expiration)
-		this.items.Set(key, item)
+		if item == nil {
+			item = nmap.NewItem(key, value, expiration)
+			items[key] = item
+			if expiration > 0 {
+				this.delayQueue.Enqueue(item, expiration)
+			}
+		} else {
+			var remain = item.Expiration() - this.delayQueue.Now()
 
-		if expiration > 0 {
-			this.delayQueue.Enqueue(item, expiration)
+			item.UpdateValue(value)
+			item.UpdateExpiration(expiration)
+
+			if expiration > 0 && remain < 3 {
+				this.delayQueue.Enqueue(item, expiration)
+			}
 		}
-	} else {
-		var remain = item.Expiration() - this.delayQueue.Now()
+		mu.Unlock()
+	})
 
-		item.UpdateValue(value)
-		item.UpdateExpiration(expiration)
-
-		if expiration > 0 && remain < 3 {
-			this.items.Set(key, item)
-			this.delayQueue.Enqueue(item, expiration)
-		}
-	}
+	//var item, _ = this.maps.Get(key)
+	//
+	//if item == nil {
+	//	item = nmap.NewItem(key, value, expiration)
+	//	this.maps.Set(key, item)
+	//
+	//	if expiration > 0 {
+	//		this.delayQueue.Enqueue(item, expiration)
+	//	}
+	//} else {
+	//	var remain = item.Expiration() - this.delayQueue.Now()
+	//
+	//	item.UpdateValue(value)
+	//	item.UpdateExpiration(expiration)
+	//
+	//	if expiration > 0 && remain < 3 {
+	//		this.maps.Set(key, item)
+	//		this.delayQueue.Enqueue(item, expiration)
+	//	}
+	//}
 }
 
 func (this *cache) SetNx(key string, value interface{}) bool {
 	var nItem = nmap.NewItem(key, value, 0)
-	return this.items.SetNx(key, nItem)
+	return this.maps.SetNx(key, nItem)
 }
 
 func (this *cache) Expire(key string, expiration int64) {
-	var item, ok = this.items.Get(key)
-	if ok {
-		var remain = item.Expiration() - this.delayQueue.Now()
+	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, items map[string]*nmap.Item) {
+		mu.Lock()
+		var item, ok = items[key]
+		if ok {
+			var remain = item.Expiration() - this.delayQueue.Now()
 
-		item.UpdateExpiration(expiration)
-
-		if expiration > 0 && remain < 3 {
-			this.items.Set(key, item)
-			this.delayQueue.Enqueue(item, expiration)
+			item.UpdateExpiration(expiration)
+			if expiration > 0 && remain < 3 {
+				this.delayQueue.Enqueue(item, expiration)
+			}
 		}
-	}
+		mu.Unlock()
+	})
+
+	//var item, ok = this.maps.Get(key)
+	//if ok {
+	//	var remain = item.Expiration() - this.delayQueue.Now()
+	//
+	//	item.UpdateExpiration(expiration)
+	//
+	//	if expiration > 0 && remain < 3 {
+	//		this.maps.Set(key, item)
+	//		this.delayQueue.Enqueue(item, expiration)
+	//	}
+	//}
 }
 
 func (this *cache) Exists(key string) bool {
-	return this.items.Exists(key)
+	return this.maps.Exists(key)
 }
 
 func (this *cache) Get(key string) (interface{}, bool) {
-	var item, ok = this.items.Get(key)
+	var item, ok = this.maps.Get(key)
 	if ok == false {
 		return nil, false
 	}
@@ -167,14 +205,14 @@ func (this *cache) Get(key string) (interface{}, bool) {
 }
 
 func (this *cache) Del(key string) {
-	var item, ok = this.items.Pop(key)
+	var item, ok = this.maps.Pop(key)
 	if this.onEvicted != nil && ok {
 		this.onEvicted(key, item.Value())
 	}
 }
 
 func (this *cache) Range(f func(key string, value interface{}) bool) {
-	this.items.Range(func(key string, item *nmap.Item) bool {
+	this.maps.Range(func(key string, item *nmap.Item) bool {
 		if this.checkExpired(item) {
 			return true
 		}
@@ -184,7 +222,7 @@ func (this *cache) Range(f func(key string, value interface{}) bool) {
 }
 
 func (this *cache) Clear() {
-	this.items.Range(func(key string, item *nmap.Item) bool {
+	this.maps.Range(func(key string, item *nmap.Item) bool {
 		this.Del(key)
 		return true
 	})
