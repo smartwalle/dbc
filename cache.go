@@ -59,9 +59,7 @@ func New(opts ...Option) Cache {
 
 	nCache.delayQueue = delay.New(
 		delay.WithTimeUnit(time.Second),
-		delay.WithTimeProvider(func() int64 {
-			return time.Now().Unix()
-		}),
+		delay.WithTimeProvider(now),
 	)
 	go nCache.run()
 
@@ -70,6 +68,10 @@ func New(opts ...Option) Cache {
 	runtime.SetFinalizer(wrapper, stop)
 
 	return wrapper
+}
+
+func now() int64 {
+	return time.Now().Unix()
 }
 
 func stop(c *cacheWrapper) {
@@ -136,7 +138,7 @@ func (this *cache) SetEx(key string, value interface{}, expiration int64) {
 				this.delayQueue.Enqueue(ele, expiration)
 			}
 		} else {
-			var remain = ele.Expiration() - this.delayQueue.Now()
+			var remain = ele.Expiration() - now()
 
 			ele.UpdateValue(value)
 			ele.UpdateExpiration(expiration)
@@ -159,7 +161,7 @@ func (this *cache) Expire(key string, expiration int64) {
 		mu.Lock()
 		var ele, ok = elements[key]
 		if ok {
-			var remain = ele.Expiration() - this.delayQueue.Now()
+			var remain = ele.Expiration() - now()
 
 			ele.UpdateExpiration(expiration)
 			if expiration > 0 && remain < 3 {
@@ -220,5 +222,5 @@ func (this *cache) checkExpired(ele *nmap.Element) bool {
 	if expiration == 0 {
 		return false
 	}
-	return this.delayQueue.Now() >= expiration
+	return now() >= expiration
 }
