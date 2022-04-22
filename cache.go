@@ -91,14 +91,6 @@ func (this *cache) run() {
 			return
 		}
 
-		//if this.checkExpired(ele) {
-		//	this.Del(ele.Key())
-		//} else {
-		//	if ele.Expiration() > 0 {
-		//		this.delayQueue.Enqueue(ele, ele.Expiration())
-		//	}
-		//}
-
 		var key = ele.Key()
 
 		this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
@@ -155,27 +147,6 @@ func (this *cache) SetEx(key string, value interface{}, expiration int64) {
 		}
 		mu.Unlock()
 	})
-
-	//var ele, _ = this.maps.Get(key)
-	//
-	//if ele == nil {
-	//	ele = nmap.NewElement(key, value, expiration)
-	//	this.maps.Set(key, ele)
-	//
-	//	if expiration > 0 {
-	//		this.delayQueue.Enqueue(ele, expiration)
-	//	}
-	//} else {
-	//	var remain = ele.Expiration() - this.delayQueue.Now()
-	//
-	//	ele.UpdateValue(value)
-	//	ele.UpdateExpiration(expiration)
-	//
-	//	if expiration > 0 && remain < 3 {
-	//		this.maps.Set(key, ele)
-	//		this.delayQueue.Enqueue(ele, expiration)
-	//	}
-	//}
 }
 
 func (this *cache) SetNx(key string, value interface{}) bool {
@@ -197,18 +168,6 @@ func (this *cache) Expire(key string, expiration int64) {
 		}
 		mu.Unlock()
 	})
-
-	//var ele, ok = this.maps.Get(key)
-	//if ok {
-	//	var remain = ele.Expiration() - this.delayQueue.Now()
-	//
-	//	ele.UpdateExpiration(expiration)
-	//
-	//	if expiration > 0 && remain < 3 {
-	//		this.maps.Set(key, ele)
-	//		this.delayQueue.Enqueue(ele, expiration)
-	//	}
-	//}
 }
 
 func (this *cache) Exists(key string) bool {
