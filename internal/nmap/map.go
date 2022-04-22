@@ -53,12 +53,12 @@ type Map struct {
 
 type shardMap struct {
 	*sync.RWMutex
-	items map[string]*Item
+	elements map[string]*Element
 }
 
-func (this *shardMap) Do(f func(mu *sync.RWMutex, items map[string]*Item)) {
+func (this *shardMap) Do(f func(mu *sync.RWMutex, elements map[string]*Element)) {
 	if f != nil {
-		f(this.RWMutex, this.items)
+		f(this.RWMutex, this.elements)
 	}
 }
 
@@ -78,7 +78,7 @@ func New(opts ...Option) *Map {
 
 	m.shards = make([]*shardMap, m.shard)
 	for i := uint32(0); i < m.shard; i++ {
-		m.shards[i] = &shardMap{RWMutex: &sync.RWMutex{}, items: make(map[string]*Item)}
+		m.shards[i] = &shardMap{RWMutex: &sync.RWMutex{}, elements: make(map[string]*Element)}
 	}
 	return m
 }
@@ -88,19 +88,19 @@ func (this *Map) GetShard(key string) *shardMap {
 	return this.shards[index]
 }
 
-func (this *Map) Set(key string, item *Item) {
+func (this *Map) Set(key string, ele *Element) {
 	var shard = this.GetShard(key)
 	shard.Lock()
-	shard.items[key] = item
+	shard.elements[key] = ele
 	shard.Unlock()
 }
 
-func (this *Map) SetNx(key string, item *Item) bool {
+func (this *Map) SetNx(key string, ele *Element) bool {
 	var shard = this.GetShard(key)
 	shard.Lock()
-	var _, ok = shard.items[key]
+	var _, ok = shard.elements[key]
 	if ok == false {
-		shard.items[key] = item
+		shard.elements[key] = ele
 		shard.Unlock()
 		return true
 	}
@@ -108,18 +108,18 @@ func (this *Map) SetNx(key string, item *Item) bool {
 	return false
 }
 
-func (this *Map) Get(key string) (*Item, bool) {
+func (this *Map) Get(key string) (*Element, bool) {
 	var shard = this.GetShard(key)
 	shard.RLock()
-	var item, ok = shard.items[key]
+	var ele, ok = shard.elements[key]
 	shard.RUnlock()
-	return item, ok
+	return ele, ok
 }
 
 func (this *Map) Exists(key string) bool {
 	var shard = this.GetShard(key)
 	shard.RLock()
-	var _, ok = shard.items[key]
+	var _, ok = shard.elements[key]
 	shard.RUnlock()
 	return ok
 }
@@ -128,7 +128,7 @@ func (this *Map) RemoveAll() {
 	for i := uint32(0); i < this.shard; i++ {
 		var shard = this.shards[i]
 		shard.Lock()
-		shard.items = make(map[string]*Item)
+		shard.elements = make(map[string]*Element)
 		shard.Unlock()
 	}
 }
@@ -136,17 +136,17 @@ func (this *Map) RemoveAll() {
 func (this *Map) Remove(key string) {
 	var shard = this.GetShard(key)
 	shard.Lock()
-	delete(shard.items, key)
+	delete(shard.elements, key)
 	shard.Unlock()
 }
 
-func (this *Map) Pop(key string) (*Item, bool) {
+func (this *Map) Pop(key string) (*Element, bool) {
 	var shard = this.GetShard(key)
 	shard.Lock()
-	var item, ok = shard.items[key]
-	delete(shard.items, key)
+	var ele, ok = shard.elements[key]
+	delete(shard.elements, key)
 	shard.Unlock()
-	return item, ok
+	return ele, ok
 }
 
 func (this *Map) Len() int {
@@ -154,20 +154,20 @@ func (this *Map) Len() int {
 	for i := uint32(0); i < this.shard; i++ {
 		var shard = this.shards[i]
 		shard.RLock()
-		count += len(shard.items)
+		count += len(shard.elements)
 		shard.RUnlock()
 	}
 	return count
 }
 
-func (this *Map) Range(f func(key string, item *Item) bool) {
+func (this *Map) Range(f func(key string, ele *Element) bool) {
 	if f == nil {
 		return
 	}
 	for i := uint32(0); i < this.shard; i++ {
 		var shard = this.shards[i]
 		shard.RLock()
-		for k, v := range shard.items {
+		for k, v := range shard.elements {
 			shard.RUnlock()
 			if f(k, v) == false {
 				return
@@ -178,12 +178,12 @@ func (this *Map) Range(f func(key string, item *Item) bool) {
 	}
 }
 
-func (this *Map) Items() map[string]*Item {
-	var nMap = make(map[string]*Item, this.Len())
+func (this *Map) Elements() map[string]*Element {
+	var nMap = make(map[string]*Element, this.Len())
 	for i := uint32(0); i < this.shard; i++ {
 		var shard = this.shards[i]
 		shard.RLock()
-		for k, v := range shard.items {
+		for k, v := range shard.elements {
 			nMap[k] = v
 		}
 		shard.RUnlock()
@@ -196,7 +196,7 @@ func (this *Map) Keys() []string {
 	for i := uint32(0); i < this.shard; i++ {
 		var shard = this.shards[i]
 		shard.RLock()
-		for k := range shard.items {
+		for k := range shard.elements {
 			nKeys = append(nKeys, k)
 		}
 		shard.RUnlock()
