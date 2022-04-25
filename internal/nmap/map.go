@@ -149,16 +149,16 @@ func (this *Map) Pop(key string) (*Element, bool) {
 	return ele, ok
 }
 
-func (this *Map) Len() int {
-	var count = 0
-	for i := uint32(0); i < this.shard; i++ {
-		var shard = this.shards[i]
-		shard.RLock()
-		count += len(shard.elements)
-		shard.RUnlock()
-	}
-	return count
-}
+//func (this *Map) Len() int {
+//	var count = 0
+//	for i := uint32(0); i < this.shard; i++ {
+//		var shard = this.shards[i]
+//		shard.RLock()
+//		count += len(shard.elements)
+//		shard.RUnlock()
+//	}
+//	return count
+//}
 
 func (this *Map) Range(f func(key string, ele *Element) bool) {
 	if f == nil {
@@ -178,28 +178,41 @@ func (this *Map) Range(f func(key string, ele *Element) bool) {
 	}
 }
 
-func (this *Map) Elements() map[string]*Element {
-	var nMap = make(map[string]*Element, this.Len())
-	for i := uint32(0); i < this.shard; i++ {
-		var shard = this.shards[i]
-		shard.RLock()
-		for k, v := range shard.elements {
-			nMap[k] = v
-		}
-		shard.RUnlock()
-	}
-	return nMap
-}
+//func (this *Map) Elements() map[string]*Element {
+//	var nMap = make(map[string]*Element, this.Len())
+//	for i := uint32(0); i < this.shard; i++ {
+//		var shard = this.shards[i]
+//		shard.RLock()
+//		for k, v := range shard.elements {
+//			nMap[k] = v
+//		}
+//		shard.RUnlock()
+//	}
+//	return nMap
+//}
 
-func (this *Map) Keys() []string {
-	var nKeys = make([]string, 0, this.Len())
-	for i := uint32(0); i < this.shard; i++ {
-		var shard = this.shards[i]
-		shard.RLock()
-		for k := range shard.elements {
-			nKeys = append(nKeys, k)
-		}
-		shard.RUnlock()
-	}
-	return nKeys
-}
+//func (this *Map) Elements() map[string]*Element {
+//	var nMap = make(map[string]*Element, this.Len())
+//	for i := uint32(0); i < this.shard; i++ {
+//		var shard = this.shards[i]
+//		shard.RLock()
+//		for k, v := range shard.elements {
+//			nMap[k] = v
+//		}
+//		shard.RUnlock()
+//	}
+//	return nMap
+//}
+
+//func (this *Map) Keys() []string {
+//	var nKeys = make([]string, 0, this.Len())
+//	for i := uint32(0); i < this.shard; i++ {
+//		var shard = this.shards[i]
+//		shard.RLock()
+//		for k := range shard.elements {
+//			nKeys = append(nKeys, k)
+//		}
+//		shard.RUnlock()
+//	}
+//	return nKeys
+//}
