@@ -17,6 +17,8 @@ func main() {
 
 	cache.SetEx("kk1", "vv1", 0)
 	cache.SetEx("kk2", "vv2", time.Now().Add(time.Second*2).Unix())
+	cache.SetEx("kk3", "vv3", time.Now().Add(time.Second*2).Unix())
+	cache.SetEx("kk4", "vv4", time.Now().Add(time.Second*2).Unix())
 	//
 	//fmt.Println(cache.Get("k1"))
 	//fmt.Println(cache.Get("k2"))

@@ -88,34 +88,35 @@ func stop(c *cacheWrapper) {
 
 func (this *cache) run() {
 	for {
-		var value, expiration = this.delayQueue.Dequeue()
+		var obj, expiration = this.delayQueue.Dequeue()
 
-		if value == nil || expiration < 0 {
+		if obj == nil || expiration < 0 {
 			return
 		}
 
-		var ele, _ = value.(*nmap.Element)
+		var ele, _ = obj.(*nmap.Element)
 		if ele == nil {
 			return
 		}
 
 		var key = ele.Key()
+		var value = ele.Value()
 
 		this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
 			mu.Lock()
 
 			if this.checkExpired(ele) {
 				var _, ok = elements[key]
+
 				if ok {
 					delete(elements, key)
+					this.release(ele)
 				}
 				mu.Unlock()
 
 				if ok && this.onEvicted != nil {
-					this.onEvicted(key, ele.Value())
+					this.onEvicted(key, value)
 				}
-
-				this.release(ele)
 			} else {
 				if ele.Expiration() > 0 {
 					this.delayQueue.Enqueue(ele, ele.Expiration())
