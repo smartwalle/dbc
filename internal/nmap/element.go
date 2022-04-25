@@ -6,12 +6,24 @@ type Element struct {
 	expiration int64
 }
 
-func NewElement(key string, value interface{}, expiration int64) *Element {
-	return &Element{
-		key:        key,
-		value:      value,
-		expiration: expiration,
-	}
+//func NewElement(key string, value interface{}, expiration int64) *Element {
+//	return &Element{
+//		key:        key,
+//		value:      value,
+//		expiration: expiration,
+//	}
+//}
+
+func (this *Element) Init(key string, value interface{}, expiration int64) {
+	this.key = key
+	this.value = value
+	this.expiration = expiration
+}
+
+func (this *Element) Reset() {
+	this.key = ""
+	this.value = nil
+	this.expiration = 0
 }
 
 func (this *Element) Key() string {

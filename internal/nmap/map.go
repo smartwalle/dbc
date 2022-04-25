@@ -124,21 +124,21 @@ func (this *Map) Exists(key string) bool {
 	return ok
 }
 
-func (this *Map) RemoveAll() {
-	for i := uint32(0); i < this.shard; i++ {
-		var shard = this.shards[i]
-		shard.Lock()
-		shard.elements = make(map[string]*Element)
-		shard.Unlock()
-	}
-}
-
-func (this *Map) Remove(key string) {
-	var shard = this.GetShard(key)
-	shard.Lock()
-	delete(shard.elements, key)
-	shard.Unlock()
-}
+//func (this *Map) RemoveAll() {
+//	for i := uint32(0); i < this.shard; i++ {
+//		var shard = this.shards[i]
+//		shard.Lock()
+//		shard.elements = make(map[string]*Element)
+//		shard.Unlock()
+//	}
+//}
+//
+//func (this *Map) Remove(key string) {
+//	var shard = this.GetShard(key)
+//	shard.Lock()
+//	delete(shard.elements, key)
+//	shard.Unlock()
+//}
 
 func (this *Map) Pop(key string) (*Element, bool) {
 	var shard = this.GetShard(key)

@@ -42,6 +42,7 @@ type option struct {
 type cache struct {
 	*option
 	maps       *nmap.Map
+	pool       *sync.Pool
 	delayQueue delay.Queue
 	onEvicted  func(string, interface{})
 }
@@ -50,6 +51,11 @@ func New(opts ...Option) Cache {
 	var nCache = &cache{}
 	nCache.option = &option{}
 	nCache.maps = nmap.New()
+	nCache.pool = &sync.Pool{
+		New: func() interface{} {
+			return &nmap.Element{}
+		},
+	}
 
 	for _, opt := range opts {
 		if opt != nil {
@@ -108,6 +114,8 @@ func (this *cache) run() {
 				if ok && this.onEvicted != nil {
 					this.onEvicted(key, ele.Value())
 				}
+
+				this.release(ele)
 			} else {
 				if ele.Expiration() > 0 {
 					this.delayQueue.Enqueue(ele, ele.Expiration())
@@ -132,7 +140,11 @@ func (this *cache) SetEx(key string, value interface{}, expiration int64) {
 		var ele, _ = elements[key]
 
 		if ele == nil {
-			ele = nmap.NewElement(key, value, expiration)
+
+			ele = this.pool.Get().(*nmap.Element)
+			ele.Init(key, value, expiration)
+			//ele = nmap.NewElement(key, value, expiration)
+
 			elements[key] = ele
 			if expiration > 0 {
 				this.delayQueue.Enqueue(ele, expiration)
@@ -152,7 +164,9 @@ func (this *cache) SetEx(key string, value interface{}, expiration int64) {
 }
 
 func (this *cache) SetNx(key string, value interface{}) bool {
-	var ele = nmap.NewElement(key, value, 0)
+	//var ele = nmap.NewElement(key, value, 0)
+	var ele = this.pool.Get().(*nmap.Element)
+	ele.Init(key, value, 0)
 	return this.maps.SetNx(key, ele)
 }
 
@@ -182,6 +196,7 @@ func (this *cache) Get(key string) (interface{}, bool) {
 		return nil, false
 	}
 	if this.checkExpired(ele) {
+		this.release(ele)
 		return nil, false
 	}
 
@@ -192,12 +207,15 @@ func (this *cache) Del(key string) {
 	var ele, ok = this.maps.Pop(key)
 	if ok && this.onEvicted != nil {
 		this.onEvicted(key, ele.Value())
+
+		this.release(ele)
 	}
 }
 
 func (this *cache) Range(f func(key string, value interface{}) bool) {
 	this.maps.Range(func(key string, ele *nmap.Element) bool {
 		if this.checkExpired(ele) {
+			this.release(ele)
 			return true
 		}
 		f(key, ele.Value())
@@ -223,4 +241,11 @@ func (this *cache) checkExpired(ele *nmap.Element) bool {
 		return false
 	}
 	return now() >= expiration
+}
+
+func (this *cache) release(ele *nmap.Element) {
+	if ele != nil {
+		ele.Reset()
+		this.pool.Put(ele)
+	}
 }
