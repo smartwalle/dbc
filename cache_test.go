@@ -3,6 +3,7 @@ package dbc_test
 import (
 	"github.com/smartwalle/dbc"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
@@ -30,6 +31,26 @@ func BenchmarkCache_Get(b *testing.B) {
 	set(c, b)
 	b.ResetTimer()
 	get(c, b)
+}
+
+func BenchmarkCache_Close(b *testing.B) {
+	c := dbc.New()
+
+	var w = &sync.WaitGroup{}
+	for i := 0; i < b.N; i++ {
+		c.Set("sss"+strconv.Itoa(i), "hello")
+		w.Add(1)
+	}
+
+	b.ResetTimer()
+
+	c.OnEvicted(func(key string, value interface{}) {
+		w.Done()
+	})
+
+	c.Close()
+
+	w.Wait()
 }
 
 func TestCache_SetEx(t *testing.T) {
@@ -75,5 +96,20 @@ func TestCache_SetEx3(t *testing.T) {
 	time.Sleep(time.Second * 3)
 	if v, _ := c.Get("k1"); v != "v2" {
 		t.Fatal("k1 的值应该是 v2")
+	}
+}
+
+func TestCache_Expire(t *testing.T) {
+	c := dbc.New()
+	c.OnEvicted(func(key string, value interface{}) {
+		t.Log("OnEvicted", time.Now().Unix(), key, value)
+	})
+
+	c.Set("k1", "v1")
+	time.Sleep(time.Second * 1)
+	c.Expire("k1", time.Now().Add(time.Second*2).Unix())
+	time.Sleep(time.Second * 3)
+	if _, ok := c.Get("k1"); ok {
+		t.Fatal("k1 应该不存在")
 	}
 }
