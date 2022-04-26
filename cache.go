@@ -96,33 +96,30 @@ func (this *cache) run() {
 			return
 		}
 
-		var ele, _ = obj.(*nmap.Element)
-		if ele == nil {
-			return
-		}
-
-		var key = ele.Key()
-		var value = ele.Value()
-
+		var key, _ = obj.(string)
 		this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
 			mu.Lock()
 
-			if this.checkExpired(ele) {
-				var _, ok = elements[key]
+			var ele, ok = elements[key]
+			if ok {
+				if this.checkExpired(ele) {
+					var value = ele.Value()
 
-				if ok {
 					delete(elements, key)
-					this.release(ele)
-				}
-				mu.Unlock()
+					ele.Reset()
+					this.pool.Put(ele)
+					mu.Unlock()
 
-				if ok && this.onEvicted != nil {
-					this.onEvicted(key, value)
+					if this.onEvicted != nil {
+						this.onEvicted(key, value)
+					}
+				} else {
+					if ele.Expiration() > 0 {
+						this.delayQueue.Enqueue(key, ele.Expiration())
+					}
+					mu.Unlock()
 				}
 			} else {
-				if ele.Expiration() > 0 {
-					this.delayQueue.Enqueue(ele, ele.Expiration())
-				}
 				mu.Unlock()
 			}
 		})
@@ -149,7 +146,7 @@ func (this *cache) SetEx(key string, value interface{}, expiration int64) bool {
 
 			elements[key] = ele
 			if expiration > 0 {
-				this.delayQueue.Enqueue(ele, expiration)
+				this.delayQueue.Enqueue(key, expiration)
 			}
 		} else {
 			var remain = ele.Expiration() - now()
@@ -158,7 +155,7 @@ func (this *cache) SetEx(key string, value interface{}, expiration int64) bool {
 			ele.UpdateExpiration(expiration)
 
 			if expiration > 0 && remain < 3 {
-				this.delayQueue.Enqueue(ele, expiration)
+				this.delayQueue.Enqueue(key, expiration)
 			}
 		}
 		mu.Unlock()
@@ -187,7 +184,7 @@ func (this *cache) Expire(key string, expiration int64) {
 
 			ele.UpdateExpiration(expiration)
 			if expiration > 0 && remain < 3 {
-				this.delayQueue.Enqueue(ele, expiration)
+				this.delayQueue.Enqueue(key, expiration)
 			}
 		}
 		mu.Unlock()
@@ -204,7 +201,6 @@ func (this *cache) Get(key string) (interface{}, bool) {
 		return nil, false
 	}
 	if this.checkExpired(ele) {
-		this.release(ele)
 		return nil, false
 	}
 
@@ -216,14 +212,16 @@ func (this *cache) Del(key string) {
 	if ok && this.onEvicted != nil {
 		this.onEvicted(key, ele.Value())
 
-		this.release(ele)
+		if ele.Expiration() <= 0 {
+			ele.Reset()
+			this.pool.Put(ele)
+		}
 	}
 }
 
 func (this *cache) Range(f func(key string, value interface{}) bool) {
 	this.maps.Range(func(key string, ele *nmap.Element) bool {
 		if this.checkExpired(ele) {
-			this.release(ele)
 			return true
 		}
 		f(key, ele.Value())
@@ -252,11 +250,4 @@ func (this *cache) checkExpired(ele *nmap.Element) bool {
 		return false
 	}
 	return now() >= expiration
-}
-
-func (this *cache) release(ele *nmap.Element) {
-	if ele != nil {
-		ele.Reset()
-		this.pool.Put(ele)
-	}
 }

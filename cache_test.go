@@ -4,6 +4,7 @@ import (
 	"github.com/smartwalle/dbc"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func set(c dbc.Cache, b *testing.B) {
@@ -29,4 +30,50 @@ func BenchmarkCache_Get(b *testing.B) {
 	set(c, b)
 	b.ResetTimer()
 	get(c, b)
+}
+
+func TestCache_SetEx(t *testing.T) {
+	c := dbc.New()
+	c.OnEvicted(func(key string, value interface{}) {
+		t.Log("OnEvicted", time.Now().Unix(), key, value)
+	})
+
+	c.SetEx("k1", "v1", time.Now().Add(time.Second*2).Unix())
+
+	time.Sleep(time.Second * 3)
+
+	if _, ok := c.Get("k1"); ok {
+		t.Fatal("k1 应该不存在")
+	}
+}
+
+func TestCache_SetEx2(t *testing.T) {
+	c := dbc.New()
+	c.OnEvicted(func(key string, value interface{}) {
+		t.Log("OnEvicted", time.Now().Unix(), key, value)
+	})
+
+	c.SetEx("k1", "v1", time.Now().Add(time.Second*2).Unix())
+	c.Del("k1")
+	c.Set("k1", "v2")
+
+	time.Sleep(time.Second * 3)
+	if v, _ := c.Get("k1"); v != "v2" {
+		t.Fatal("k1 的值应该是 v2")
+	}
+}
+
+func TestCache_SetEx3(t *testing.T) {
+	c := dbc.New()
+	c.OnEvicted(func(key string, value interface{}) {
+		t.Log("OnEvicted", time.Now().Unix(), key, value)
+	})
+
+	c.SetEx("k1", "v1", time.Now().Add(time.Second*2).Unix())
+	c.Set("k1", "v2")
+
+	time.Sleep(time.Second * 3)
+	if v, _ := c.Get("k1"); v != "v2" {
+		t.Fatal("k1 的值应该是 v2")
+	}
 }
