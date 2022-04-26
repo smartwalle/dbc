@@ -84,8 +84,8 @@ func now() int64 {
 
 func stop(c *cacheWrapper) {
 	c.cache.Close()
-	c.cache.maps = nil
-	c.cache = nil
+	//c.cache.maps = nil
+	//c.cache = nil
 }
 
 func (this *cache) run() {
