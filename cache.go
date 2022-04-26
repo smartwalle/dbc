@@ -5,13 +5,14 @@ import (
 	"github.com/smartwalle/queue/delay"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type Cache interface {
-	Set(key string, value interface{})
+	Set(key string, value interface{}) bool
 
-	SetEx(key string, value interface{}, expiration int64)
+	SetEx(key string, value interface{}, expiration int64) bool
 
 	SetNx(key string, value interface{}) bool
 
@@ -25,7 +26,7 @@ type Cache interface {
 
 	Range(f func(key string, value interface{}) bool)
 
-	Clear()
+	Close()
 
 	OnEvicted(func(key string, value interface{}))
 }
@@ -45,6 +46,7 @@ type cache struct {
 	pool       *sync.Pool
 	delayQueue delay.Queue
 	onEvicted  func(string, interface{})
+	closed     int32
 }
 
 func New(opts ...Option) Cache {
@@ -81,7 +83,7 @@ func now() int64 {
 }
 
 func stop(c *cacheWrapper) {
-	c.cache.close()
+	c.cache.Close()
 	c.cache.maps = nil
 	c.cache = nil
 }
@@ -127,15 +129,15 @@ func (this *cache) run() {
 	}
 }
 
-func (this *cache) close() {
-	this.delayQueue.Close()
+func (this *cache) Set(key string, value interface{}) bool {
+	return this.SetEx(key, value, 0)
 }
 
-func (this *cache) Set(key string, value interface{}) {
-	this.SetEx(key, value, 0)
-}
+func (this *cache) SetEx(key string, value interface{}, expiration int64) bool {
+	if atomic.LoadInt32(&this.closed) == 1 {
+		return false
+	}
 
-func (this *cache) SetEx(key string, value interface{}, expiration int64) {
 	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
 		mu.Lock()
 		var ele, _ = elements[key]
@@ -144,7 +146,6 @@ func (this *cache) SetEx(key string, value interface{}, expiration int64) {
 
 			ele = this.pool.Get().(*nmap.Element)
 			ele.Init(key, value, expiration)
-			//ele = nmap.NewElement(key, value, expiration)
 
 			elements[key] = ele
 			if expiration > 0 {
@@ -162,16 +163,22 @@ func (this *cache) SetEx(key string, value interface{}, expiration int64) {
 		}
 		mu.Unlock()
 	})
+	return true
 }
 
 func (this *cache) SetNx(key string, value interface{}) bool {
-	//var ele = nmap.NewElement(key, value, 0)
+	if atomic.LoadInt32(&this.closed) == 1 {
+		return false
+	}
 	var ele = this.pool.Get().(*nmap.Element)
 	ele.Init(key, value, 0)
 	return this.maps.SetNx(key, ele)
 }
 
 func (this *cache) Expire(key string, expiration int64) {
+	if atomic.LoadInt32(&this.closed) == 1 {
+		return
+	}
 	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
 		mu.Lock()
 		var ele, ok = elements[key]
@@ -224,11 +231,14 @@ func (this *cache) Range(f func(key string, value interface{}) bool) {
 	})
 }
 
-func (this *cache) Clear() {
-	this.maps.Range(func(key string, ele *nmap.Element) bool {
-		this.Del(key)
-		return true
-	})
+func (this *cache) Close() {
+	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
+		this.delayQueue.Close()
+		this.maps.Range(func(key string, ele *nmap.Element) bool {
+			this.Del(key)
+			return true
+		})
+	}
 }
 
 func (this *cache) OnEvicted(f func(key string, value interface{})) {
