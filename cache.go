@@ -44,7 +44,7 @@ type cache struct {
 	*option
 	maps       *nmap.Map
 	pool       *sync.Pool
-	delayQueue delay.Queue
+	delayQueue delay.Queue[string]
 	onEvicted  func(string, interface{})
 	closed     int32
 }
@@ -65,7 +65,7 @@ func New(opts ...Option) Cache {
 		}
 	}
 
-	nCache.delayQueue = delay.New(
+	nCache.delayQueue = delay.New[string](
 		delay.WithTimeUnit(time.Second),
 		delay.WithTimeProvider(now),
 	)
@@ -90,13 +90,13 @@ func stop(c *cacheWrapper) {
 
 func (this *cache) run() {
 	for {
-		var obj, expiration = this.delayQueue.Dequeue()
+		var key, expiration = this.delayQueue.Dequeue()
 
-		if obj == nil || expiration < 0 {
+		if expiration < 0 {
 			return
 		}
 
-		var key, _ = obj.(string)
+		//var key, _ = obj.(string)
 		this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
 			mu.Lock()
 
