@@ -1,11 +1,7 @@
 module github.com/smartwalle/dbc
 
 require (
-	github.com/smartwalle/queue v0.0.0
-)
-
-replace (
-	github.com/smartwalle/queue => /Users/yang/Desktop/smartwalle/queue
+	github.com/smartwalle/queue v0.0.1
 )
 
 go 1.18
