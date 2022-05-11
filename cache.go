@@ -41,6 +41,8 @@ type option struct {
 	hitTTL int64
 }
 
+// WithHitTTL 设置访问命中延长过期时间
+// 当调用 Get 方法有获取到数据，该数据有设置过期时间并且过期时间小于本方法指定的值，则在原有过期时间上加上本方法指定的值
 func WithHitTTL(seconds int64) Option {
 	return func(opt *option) {
 		if seconds < 0 {
@@ -225,7 +227,7 @@ func (this *cache) Get(key string) (interface{}, bool) {
 	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
 		mu.Lock()
 		ele, found = elements[key]
-		if found && this.hitTTL > 0 && ele.Expiration() > 0 {
+		if found && this.hitTTL > 0 && ele.Expiration() > 0 && ele.Expiration()-now() < this.hitTTL {
 			var expiration = ele.Expiration() + this.hitTTL
 			ele.UpdateExpiration(expiration)
 		}
