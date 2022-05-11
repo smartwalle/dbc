@@ -114,6 +114,43 @@ func TestCache_SetEx4(t *testing.T) {
 	}
 }
 
+func TestCache_SetEx5(t *testing.T) {
+	c := dbc.New()
+	c.OnEvicted(func(key string, value interface{}) {
+		t.Log("OnEvicted", time.Now().Unix(), key, value)
+	})
+
+	c.SetEx("k1", "v1", 2)
+	time.Sleep(time.Second * 2)
+	c.SetEx("k1", "v2", 2)
+}
+
+func TestCache_HitTTL(t *testing.T) {
+	c := dbc.New(dbc.WithHitTTL(5))
+	c.OnEvicted(func(key string, value interface{}) {
+		t.Log("OnEvicted", time.Now().Unix(), key, value)
+	})
+
+	// 3 秒后过期
+	c.SetEx("k1", "v1", 3)
+
+	// 获取到数据，过期时间延长 5 秒，大概就是 8 秒后过期
+	c.Get("k1")
+
+	time.Sleep(time.Second * 7)
+
+	// 过期时间还剩 1 秒，所以可以获取到数据，并且过期时间延长 5 秒，大概就是 6 秒后过期
+	if v, _ := c.Get("k1"); v != "v1" {
+		t.Fatal("k1 的值应该是 v1")
+	}
+
+	time.Sleep(time.Second * 7)
+
+	if _, ok := c.Get("k1"); ok {
+		t.Fatal("k1 应该不存在")
+	}
+}
+
 func TestCache_Expire(t *testing.T) {
 	c := dbc.New()
 	c.OnEvicted(func(key string, value interface{}) {

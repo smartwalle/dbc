@@ -35,9 +35,19 @@ type cacheWrapper struct {
 	*cache
 }
 
-type Option func(c *option)
+type Option func(opt *option)
 
 type option struct {
+	hitTTL int64
+}
+
+func WithHitTTL(seconds int64) Option {
+	return func(opt *option) {
+		if seconds < 0 {
+			seconds = 0
+		}
+		opt.hitTTL = seconds
+	}
 }
 
 type cache struct {
@@ -147,6 +157,7 @@ func (this *cache) SetEx(key string, value interface{}, seconds int64) bool {
 		if ele == nil {
 
 			ele = this.pool.Get().(*nmap.Element)
+			//ele = &nmap.Element{}
 			ele.Init(key, value, expiration)
 
 			elements[key] = ele
@@ -194,6 +205,7 @@ func (this *cache) Expire(key string, seconds int64) {
 			var remain = ele.Expiration() - now()
 
 			ele.UpdateExpiration(expiration)
+
 			if expiration > 0 && remain < 3 {
 				this.delayQueue.Enqueue(key, expiration)
 			}
@@ -207,14 +219,26 @@ func (this *cache) Exists(key string) bool {
 }
 
 func (this *cache) Get(key string) (interface{}, bool) {
-	var ele, ok = this.maps.Get(key)
-	if ok == false {
-		return nil, false
-	}
-	if this.checkExpired(ele) {
+	var ele *nmap.Element
+	var found bool
+
+	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
+		mu.Lock()
+		ele, found = elements[key]
+		if found && this.hitTTL > 0 && ele.Expiration() > 0 {
+			var expiration = ele.Expiration() + this.hitTTL
+			ele.UpdateExpiration(expiration)
+		}
+		mu.Unlock()
+	})
+
+	if found == false {
 		return nil, false
 	}
 
+	if this.checkExpired(ele) {
+		return nil, false
+	}
 	return ele.Value(), true
 }
 
