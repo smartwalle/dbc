@@ -12,11 +12,11 @@ import (
 type Cache interface {
 	Set(key string, value interface{}) bool
 
-	SetEx(key string, value interface{}, expiration int64) bool
+	SetEx(key string, value interface{}, seconds int64) bool
 
 	SetNx(key string, value interface{}) bool
 
-	Expire(key string, expiration int64)
+	Expire(key string, seconds int64)
 
 	Exists(key string) bool
 
@@ -130,9 +130,14 @@ func (this *cache) Set(key string, value interface{}) bool {
 	return this.SetEx(key, value, 0)
 }
 
-func (this *cache) SetEx(key string, value interface{}, expiration int64) bool {
+func (this *cache) SetEx(key string, value interface{}, seconds int64) bool {
 	if atomic.LoadInt32(&this.closed) == 1 {
 		return false
+	}
+
+	var expiration = int64(0)
+	if seconds > 0 {
+		expiration = now() + seconds
 	}
 
 	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
@@ -172,10 +177,16 @@ func (this *cache) SetNx(key string, value interface{}) bool {
 	return this.maps.SetNx(key, ele)
 }
 
-func (this *cache) Expire(key string, expiration int64) {
+func (this *cache) Expire(key string, seconds int64) {
 	if atomic.LoadInt32(&this.closed) == 1 {
 		return
 	}
+
+	var expiration = int64(0)
+	if seconds > 0 {
+		expiration = now() + seconds
+	}
+
 	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
 		mu.Lock()
 		var ele, ok = elements[key]
