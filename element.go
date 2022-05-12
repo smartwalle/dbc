@@ -1,6 +1,6 @@
 package dbc
 
-type Element struct {
-	value      interface{}
+type Element[T any] struct {
+	value      T
 	expiration int64
 }

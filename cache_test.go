@@ -8,33 +8,33 @@ import (
 	"time"
 )
 
-func set(c dbc.Cache, b *testing.B) {
+func set(c dbc.Cache[string], b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		c.Set("sss"+strconv.Itoa(i), "hello")
 	}
 }
 
-func get(c dbc.Cache, b *testing.B) {
+func get(c dbc.Cache[string], b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		c.Get("sss" + strconv.Itoa(i))
 	}
 }
 
 func BenchmarkCache_Set(b *testing.B) {
-	c := dbc.New()
+	c := dbc.New[string]()
 	b.ResetTimer()
 	set(c, b)
 }
 
 func BenchmarkCache_Get(b *testing.B) {
-	c := dbc.New()
+	c := dbc.New[string]()
 	set(c, b)
 	b.ResetTimer()
 	get(c, b)
 }
 
 func BenchmarkCache_Close(b *testing.B) {
-	c := dbc.New()
+	c := dbc.New[string]()
 
 	var w = &sync.WaitGroup{}
 	for i := 0; i < b.N; i++ {
@@ -44,7 +44,7 @@ func BenchmarkCache_Close(b *testing.B) {
 
 	b.ResetTimer()
 
-	c.OnEvicted(func(key string, value interface{}) {
+	c.OnEvicted(func(key string, value string) {
 		w.Done()
 	})
 
@@ -54,8 +54,8 @@ func BenchmarkCache_Close(b *testing.B) {
 }
 
 func TestCache_SetEx(t *testing.T) {
-	c := dbc.New()
-	c.OnEvicted(func(key string, value interface{}) {
+	c := dbc.New[string]()
+	c.OnEvicted(func(key string, value string) {
 		t.Log("OnEvicted", time.Now().Unix(), key, value)
 	})
 
@@ -69,8 +69,8 @@ func TestCache_SetEx(t *testing.T) {
 }
 
 func TestCache_SetEx2(t *testing.T) {
-	c := dbc.New()
-	c.OnEvicted(func(key string, value interface{}) {
+	c := dbc.New[string]()
+	c.OnEvicted(func(key string, value string) {
 		t.Log("OnEvicted", time.Now().Unix(), key, value)
 	})
 
@@ -84,8 +84,8 @@ func TestCache_SetEx2(t *testing.T) {
 }
 
 func TestCache_SetEx3(t *testing.T) {
-	c := dbc.New()
-	c.OnEvicted(func(key string, value interface{}) {
+	c := dbc.New[string]()
+	c.OnEvicted(func(key string, value string) {
 		t.Log("OnEvicted", time.Now().Unix(), key, value)
 	})
 
@@ -100,8 +100,8 @@ func TestCache_SetEx3(t *testing.T) {
 }
 
 func TestCache_SetEx4(t *testing.T) {
-	c := dbc.New()
-	c.OnEvicted(func(key string, value interface{}) {
+	c := dbc.New[string]()
+	c.OnEvicted(func(key string, value string) {
 		t.Log("OnEvicted", time.Now().Unix(), key, value)
 	})
 
@@ -115,8 +115,8 @@ func TestCache_SetEx4(t *testing.T) {
 }
 
 func TestCache_SetEx5(t *testing.T) {
-	c := dbc.New()
-	c.OnEvicted(func(key string, value interface{}) {
+	c := dbc.New[string]()
+	c.OnEvicted(func(key string, value string) {
 		t.Log("OnEvicted", time.Now().Unix(), key, value)
 	})
 
@@ -126,8 +126,8 @@ func TestCache_SetEx5(t *testing.T) {
 }
 
 func TestCache_HitTTL(t *testing.T) {
-	c := dbc.New(dbc.WithHitTTL(5))
-	c.OnEvicted(func(key string, value interface{}) {
+	c := dbc.New[string](dbc.WithHitTTL(5))
+	c.OnEvicted(func(key string, value string) {
 		t.Log("OnEvicted", time.Now().Unix(), key, value)
 	})
 
@@ -152,8 +152,8 @@ func TestCache_HitTTL(t *testing.T) {
 }
 
 func TestCache_Expire(t *testing.T) {
-	c := dbc.New()
-	c.OnEvicted(func(key string, value interface{}) {
+	c := dbc.New[string]()
+	c.OnEvicted(func(key string, value string) {
 		t.Log("OnEvicted", time.Now().Unix(), key, value)
 	})
 

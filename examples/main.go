@@ -7,8 +7,8 @@ import (
 )
 
 func main() {
-	var cache = dbc.New()
-	cache.OnEvicted(func(key string, value interface{}) {
+	var cache = dbc.New[string]()
+	cache.OnEvicted(func(key string, value string) {
 		//fmt.Println("Del", time.Now().Unix(), key, value)
 	})
 
