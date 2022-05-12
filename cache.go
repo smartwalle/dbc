@@ -71,11 +71,11 @@ func New[T any](opts ...Option) Cache[T] {
 	}
 	nCache.delayQueue = delay.New[string](
 		delay.WithTimeUnit(time.Second),
-		delay.WithTimeProvider(nCache.option.now),
+		delay.WithTimeProvider(nCache.now),
 	)
 
-	nCache.shards = make([]*shardCache[T], nCache.option.shard)
-	for i := uint32(0); i < nCache.option.shard; i++ {
+	nCache.shards = make([]*shardCache[T], nCache.shard)
+	for i := uint32(0); i < nCache.shard; i++ {
 		nCache.shards[i] = newShard[T](nCache.delayQueue, nCache.option)
 	}
 
@@ -85,7 +85,7 @@ func New[T any](opts ...Option) Cache[T] {
 }
 
 func (this *cache[T]) getShard(key string) *shardCache[T] {
-	var index = djb(this.option.seed, key) % this.option.shard
+	var index = djb(this.seed, key) % this.shard
 	return this.shards[index]
 }
 
