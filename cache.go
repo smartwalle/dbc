@@ -1,8 +1,8 @@
 package dbc
 
 import (
-	"github.com/smartwalle/dbc/internal/nmap"
 	"github.com/smartwalle/queue/delay"
+	"math/rand"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -24,8 +24,6 @@ type Cache interface {
 
 	Del(key string)
 
-	Range(f func(key string, value interface{}) bool)
-
 	Close()
 
 	OnEvicted(func(key string, value interface{}))
@@ -39,6 +37,7 @@ type Option func(opt *option)
 
 type option struct {
 	hitTTL int64
+	now    func() int64
 }
 
 // WithHitTTL 设置访问命中延长过期时间
@@ -54,27 +53,43 @@ func WithHitTTL(seconds int64) Option {
 
 type cache struct {
 	*option
-	maps       *nmap.Map
+	seed       uint32
+	shard      uint32
+	shards     []*shardCache
 	delayQueue delay.Queue[string]
-	onEvicted  func(string, interface{})
 	closed     int32
 }
 
 func New(opts ...Option) Cache {
 	var nCache = &cache{}
-	nCache.option = &option{}
-	nCache.maps = nmap.New()
+	nCache.option = &option{
+		now: func() int64 {
+			return time.Now().Unix()
+		},
+	}
+	nCache.seed = rand.New(rand.NewSource(time.Now().Unix())).Uint32()
+	nCache.shard = 32
 
 	for _, opt := range opts {
 		if opt != nil {
 			opt(nCache.option)
 		}
 	}
-
 	nCache.delayQueue = delay.New[string](
 		delay.WithTimeUnit(time.Second),
-		delay.WithTimeProvider(now),
+		delay.WithTimeProvider(nCache.option.now),
 	)
+
+	nCache.shards = make([]*shardCache, nCache.shard)
+	for i := uint32(0); i < nCache.shard; i++ {
+		nCache.shards[i] = &shardCache{
+			option:     nCache.option,
+			RWMutex:    &sync.RWMutex{},
+			elements:   make(map[string]*Element),
+			delayQueue: nCache.delayQueue,
+		}
+	}
+
 	go nCache.run()
 
 	var wrapper = &cacheWrapper{}
@@ -84,14 +99,13 @@ func New(opts ...Option) Cache {
 	return wrapper
 }
 
-func now() int64 {
-	return time.Now().Unix()
-}
-
 func stop(c *cacheWrapper) {
 	c.cache.Close()
-	//c.cache.maps = nil
-	//c.cache = nil
+}
+
+func (this *cache) getShard(key string) *shardCache {
+	var index = djb(this.seed, key) % this.shard
+	return this.shards[index]
 }
 
 func (this *cache) run() {
@@ -102,180 +116,58 @@ func (this *cache) run() {
 			return
 		}
 
-		//var key, _ = obj.(string)
-		this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
-			mu.Lock()
-
-			var ele, ok = elements[key]
-			if ok {
-				if this.checkExpired(ele) {
-					var value = ele.Value
-
-					delete(elements, key)
-					ele.Value = nil
-					ele.Expiration = 0
-
-					mu.Unlock()
-
-					if this.onEvicted != nil {
-						this.onEvicted(key, value)
-					}
-				} else {
-					if ele.Expiration > 0 {
-						this.delayQueue.Enqueue(key, ele.Expiration)
-					}
-					mu.Unlock()
-				}
-			} else {
-				mu.Unlock()
-			}
-		})
+		this.getShard(key).tick(key)
 	}
 }
 
 func (this *cache) Set(key string, value interface{}) bool {
-	return this.SetEx(key, value, 0)
+	return this.getShard(key).SetEx(key, value, 0)
 }
 
 func (this *cache) SetEx(key string, value interface{}, seconds int64) bool {
 	if atomic.LoadInt32(&this.closed) == 1 {
 		return false
 	}
-
-	var expiration = int64(0)
-	if seconds > 0 {
-		expiration = now() + seconds
-	}
-
-	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
-		mu.Lock()
-		var ele, _ = elements[key]
-
-		if ele == nil {
-			ele = &nmap.Element{}
-			ele.Value = value
-			ele.Expiration = expiration
-			elements[key] = ele
-
-			if expiration > 0 {
-				this.delayQueue.Enqueue(key, expiration)
-			}
-		} else {
-			var remain = ele.Expiration - now()
-
-			ele.Value = value
-			ele.Expiration = expiration
-
-			if expiration > 0 && remain < 3 {
-				this.delayQueue.Enqueue(key, expiration)
-			}
-		}
-		mu.Unlock()
-	})
-	return true
+	return this.getShard(key).SetEx(key, value, seconds)
 }
 
 func (this *cache) SetNx(key string, value interface{}) bool {
 	if atomic.LoadInt32(&this.closed) == 1 {
 		return false
 	}
-
-	var ele = &nmap.Element{}
-	ele.Value = value
-	ele.Expiration = 0
-	return this.maps.SetNx(key, ele)
+	return this.getShard(key).SetNx(key, value)
 }
 
 func (this *cache) Expire(key string, seconds int64) {
 	if atomic.LoadInt32(&this.closed) == 1 {
 		return
 	}
-
-	var expiration = int64(0)
-	if seconds > 0 {
-		expiration = now() + seconds
-	}
-
-	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
-		mu.Lock()
-		var ele, ok = elements[key]
-		if ok {
-			var remain = ele.Expiration - now()
-
-			ele.Expiration = expiration
-
-			if expiration > 0 && remain < 3 {
-				this.delayQueue.Enqueue(key, expiration)
-			}
-		}
-		mu.Unlock()
-	})
+	this.getShard(key).Expire(key, seconds)
 }
 
 func (this *cache) Exists(key string) bool {
-	return this.maps.Exists(key)
+	return this.getShard(key).Exists(key)
 }
 
 func (this *cache) Get(key string) (interface{}, bool) {
-	var ele *nmap.Element
-	var found bool
-
-	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
-		mu.Lock()
-		ele, found = elements[key]
-		if found && this.hitTTL > 0 && ele.Expiration > 0 && ele.Expiration-now() < this.hitTTL {
-			ele.Expiration = ele.Expiration + this.hitTTL
-		}
-		mu.Unlock()
-	})
-
-	if found == false {
-		return nil, false
-	}
-
-	if this.checkExpired(ele) {
-		return nil, false
-	}
-	return ele.Value, true
+	return this.getShard(key).Get(key)
 }
 
 func (this *cache) Del(key string) {
-	var ele, ok = this.maps.Pop(key)
-	if ok && this.onEvicted != nil {
-		this.onEvicted(key, ele.Value)
-
-		if ele.Expiration <= 0 {
-			ele.Value = nil
-			ele.Expiration = 0
-		}
-	}
-}
-
-func (this *cache) Range(f func(key string, value interface{}) bool) {
-	this.maps.Range(func(key string, ele *nmap.Element) bool {
-		if this.checkExpired(ele) {
-			return true
-		}
-		f(key, ele.Value)
-		return true
-	})
+	this.getShard(key).Del(key)
 }
 
 func (this *cache) Close() {
 	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
 		this.delayQueue.Close()
-		this.maps.Range(func(key string, ele *nmap.Element) bool {
-			this.Del(key)
-			return true
-		})
+		for _, shard := range this.shards {
+			go shard.close()
+		}
 	}
 }
 
 func (this *cache) OnEvicted(f func(key string, value interface{})) {
-	this.onEvicted = f
-}
-
-// checkExpired 检测是否过期
-func (this *cache) checkExpired(ele *nmap.Element) bool {
-	return ele.Expiration > 0 && now() >= ele.Expiration
+	for _, shard := range this.shards {
+		shard.onEvicted = f
+	}
 }

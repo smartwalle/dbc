@@ -9,7 +9,7 @@ import (
 func main() {
 	var cache = dbc.New()
 	cache.OnEvicted(func(key string, value interface{}) {
-		fmt.Println("Del", time.Now().Unix(), key, value)
+		//fmt.Println("Del", time.Now().Unix(), key, value)
 	})
 
 	cache.Set("k1", "v1")
@@ -24,10 +24,20 @@ func main() {
 	//fmt.Println(cache.Get("k2"))
 	//fmt.Println(cache.Get("k3"))
 
+	go func() {
+		var i = 0
+		for {
+			cache.SetEx(fmt.Sprintf("%d", i), "testsss", 20)
+			i++
+		}
+	}()
+
+	var i = 0
 	for {
-		fmt.Println(cache.Get("kk1"))
+		fmt.Println(i)
 		cache.Expire("kk1", 5)
 		time.Sleep(time.Second)
+		i++
 	}
 
 	select {}
