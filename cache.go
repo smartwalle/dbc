@@ -55,7 +55,6 @@ func WithHitTTL(seconds int64) Option {
 type cache struct {
 	*option
 	maps       *nmap.Map
-	pool       *sync.Pool
 	delayQueue delay.Queue[string]
 	onEvicted  func(string, interface{})
 	closed     int32
@@ -65,11 +64,6 @@ func New(opts ...Option) Cache {
 	var nCache = &cache{}
 	nCache.option = &option{}
 	nCache.maps = nmap.New()
-	nCache.pool = &sync.Pool{
-		New: func() interface{} {
-			return &nmap.Element{}
-		},
-	}
 
 	for _, opt := range opts {
 		if opt != nil {
@@ -115,19 +109,20 @@ func (this *cache) run() {
 			var ele, ok = elements[key]
 			if ok {
 				if this.checkExpired(ele) {
-					var value = ele.Value()
+					var value = ele.Value
 
 					delete(elements, key)
-					ele.Reset()
-					this.pool.Put(ele)
+					ele.Value = nil
+					ele.Expiration = 0
+
 					mu.Unlock()
 
 					if this.onEvicted != nil {
 						this.onEvicted(key, value)
 					}
 				} else {
-					if ele.Expiration() > 0 {
-						this.delayQueue.Enqueue(key, ele.Expiration())
+					if ele.Expiration > 0 {
+						this.delayQueue.Enqueue(key, ele.Expiration)
 					}
 					mu.Unlock()
 				}
@@ -157,20 +152,19 @@ func (this *cache) SetEx(key string, value interface{}, seconds int64) bool {
 		var ele, _ = elements[key]
 
 		if ele == nil {
-
-			ele = this.pool.Get().(*nmap.Element)
-			//ele = &nmap.Element{}
-			ele.Init(key, value, expiration)
-
+			ele = &nmap.Element{}
+			ele.Value = value
+			ele.Expiration = expiration
 			elements[key] = ele
+
 			if expiration > 0 {
 				this.delayQueue.Enqueue(key, expiration)
 			}
 		} else {
-			var remain = ele.Expiration() - now()
+			var remain = ele.Expiration - now()
 
-			ele.UpdateValue(value)
-			ele.UpdateExpiration(expiration)
+			ele.Value = value
+			ele.Expiration = expiration
 
 			if expiration > 0 && remain < 3 {
 				this.delayQueue.Enqueue(key, expiration)
@@ -185,8 +179,10 @@ func (this *cache) SetNx(key string, value interface{}) bool {
 	if atomic.LoadInt32(&this.closed) == 1 {
 		return false
 	}
-	var ele = this.pool.Get().(*nmap.Element)
-	ele.Init(key, value, 0)
+
+	var ele = &nmap.Element{}
+	ele.Value = value
+	ele.Expiration = 0
 	return this.maps.SetNx(key, ele)
 }
 
@@ -204,9 +200,9 @@ func (this *cache) Expire(key string, seconds int64) {
 		mu.Lock()
 		var ele, ok = elements[key]
 		if ok {
-			var remain = ele.Expiration() - now()
+			var remain = ele.Expiration - now()
 
-			ele.UpdateExpiration(expiration)
+			ele.Expiration = expiration
 
 			if expiration > 0 && remain < 3 {
 				this.delayQueue.Enqueue(key, expiration)
@@ -227,9 +223,8 @@ func (this *cache) Get(key string) (interface{}, bool) {
 	this.maps.GetShard(key).Do(func(mu *sync.RWMutex, elements map[string]*nmap.Element) {
 		mu.Lock()
 		ele, found = elements[key]
-		if found && this.hitTTL > 0 && ele.Expiration() > 0 && ele.Expiration()-now() < this.hitTTL {
-			var expiration = ele.Expiration() + this.hitTTL
-			ele.UpdateExpiration(expiration)
+		if found && this.hitTTL > 0 && ele.Expiration > 0 && ele.Expiration-now() < this.hitTTL {
+			ele.Expiration = ele.Expiration + this.hitTTL
 		}
 		mu.Unlock()
 	})
@@ -241,17 +236,17 @@ func (this *cache) Get(key string) (interface{}, bool) {
 	if this.checkExpired(ele) {
 		return nil, false
 	}
-	return ele.Value(), true
+	return ele.Value, true
 }
 
 func (this *cache) Del(key string) {
 	var ele, ok = this.maps.Pop(key)
 	if ok && this.onEvicted != nil {
-		this.onEvicted(key, ele.Value())
+		this.onEvicted(key, ele.Value)
 
-		if ele.Expiration() <= 0 {
-			ele.Reset()
-			this.pool.Put(ele)
+		if ele.Expiration <= 0 {
+			ele.Value = nil
+			ele.Expiration = 0
 		}
 	}
 }
@@ -261,7 +256,7 @@ func (this *cache) Range(f func(key string, value interface{}) bool) {
 		if this.checkExpired(ele) {
 			return true
 		}
-		f(key, ele.Value())
+		f(key, ele.Value)
 		return true
 	})
 }
@@ -282,9 +277,5 @@ func (this *cache) OnEvicted(f func(key string, value interface{})) {
 
 // checkExpired 检测是否过期
 func (this *cache) checkExpired(ele *nmap.Element) bool {
-	var expiration = ele.Expiration()
-	if expiration == 0 {
-		return false
-	}
-	return now() >= expiration
+	return ele.Expiration > 0 && now() >= ele.Expiration
 }
