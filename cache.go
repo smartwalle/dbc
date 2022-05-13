@@ -97,7 +97,7 @@ func (this *cache[T]) run() {
 			return
 		}
 
-		this.getShard(key).tick(key)
+		this.getShard(key).expireTick(key)
 	}
 }
 

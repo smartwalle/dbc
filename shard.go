@@ -23,7 +23,7 @@ func newShard[T any](delayQueue delay.Queue[string], opt *option) *shardCache[T]
 	return shard
 }
 
-func (this *shardCache[T]) tick(key string) {
+func (this *shardCache[T]) expireTick(key string) bool {
 	this.Lock()
 
 	var ele, found = this.elements[key]
@@ -41,12 +41,15 @@ func (this *shardCache[T]) tick(key string) {
 			if this.onEvicted != nil {
 				this.onEvicted(key, value)
 			}
+			return true
 		} else {
 			this.delayQueue.Enqueue(key, ele.expiration)
 			this.Unlock()
+			return false
 		}
 	} else {
 		this.Unlock()
+		return false
 	}
 }
 
@@ -161,22 +164,21 @@ func (this *shardCache[T]) Get(key string) (T, bool) {
 func (this *shardCache[T]) Del(key string) {
 	this.Lock()
 	var ele, found = this.elements[key]
-	if found == false {
+	if found {
+		var value = ele.value
+
+		delete(this.elements, key)
+
+		ele.expiration = 0
+		ele.value = this.empty
+
 		this.Unlock()
-		return
-	}
 
-	var value = ele.value
-
-	delete(this.elements, key)
-
-	ele.expiration = 0
-	ele.value = this.empty
-
-	this.Unlock()
-
-	if this.onEvicted != nil {
-		this.onEvicted(key, value)
+		if this.onEvicted != nil {
+			this.onEvicted(key, value)
+		}
+	} else {
+		this.Unlock()
 	}
 }
 
