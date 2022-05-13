@@ -191,3 +191,32 @@ func TestCache_Expire(t *testing.T) {
 		t.Fatal("k1 应该不存在")
 	}
 }
+
+func TestCache_Del(t *testing.T) {
+	c := dbc.New[string]()
+	c.OnEvicted(func(key string, value string) {
+		t.Log("OnEvicted", time.Now().Unix(), key, value)
+		c.Set("k2", "v2")
+	})
+	c.Set("k1", "v1")
+	c.Del("k1")
+
+	if v, _ := c.Get("k2"); v != "v2" {
+		t.Fatal("k2 的值应该是 v2")
+	}
+}
+
+func TestCache_SetNx(t *testing.T) {
+	c := dbc.New[string]()
+	if c.SetNx("k1", "v1") == false {
+		t.Fatal("应该返回 true")
+	}
+
+	if c.SetNx("k1", "v2") {
+		t.Fatal("应该返回 false")
+	}
+
+	if v, _ := c.Get("k1"); v != "v1" {
+		t.Fatal("k1 的值应该是 v1")
+	}
+}

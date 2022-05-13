@@ -32,8 +32,9 @@ func (this *shardCache[T]) tick(key string) {
 			var value = ele.value
 
 			delete(this.elements, key)
-			ele.value = this.empty
+
 			ele.expiration = 0
+			ele.value = this.empty
 
 			this.Unlock()
 
@@ -66,8 +67,8 @@ func (this *shardCache[T]) SetEx(key string, value T, seconds int64) bool {
 
 	if ele == nil {
 		ele = &Element[T]{}
-		ele.value = value
 		ele.expiration = expiration
+		ele.value = value
 		this.elements[key] = ele
 
 		if expiration > 0 {
@@ -76,8 +77,8 @@ func (this *shardCache[T]) SetEx(key string, value T, seconds int64) bool {
 	} else {
 		var remain = ele.expiration - now
 
-		ele.value = value
 		ele.expiration = expiration
+		ele.value = value
 
 		if expiration > 0 && remain < 3 {
 			this.delayQueue.Enqueue(key, expiration)
@@ -172,8 +173,8 @@ func (this *shardCache[T]) Del(key string) {
 		this.onEvicted(key, ele.value)
 	}
 
-	ele.value = this.empty
 	ele.expiration = 0
+	ele.value = this.empty
 }
 
 func (this *shardCache[T]) close() {
