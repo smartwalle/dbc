@@ -114,8 +114,8 @@ func (this *shardCache[T]) Expire(key string, seconds int64) {
 	}
 
 	this.Lock()
-	var ele, ok = this.elements[key]
-	if ok {
+	var ele, found = this.elements[key]
+	if found {
 		var remain = ele.expiration - now
 
 		ele.expiration = expiration
