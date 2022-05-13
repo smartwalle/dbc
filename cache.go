@@ -102,7 +102,7 @@ func (this *cache[T]) run() {
 }
 
 func (this *cache[T]) Set(key string, value T) bool {
-	return this.getShard(key).SetEx(key, value, 0)
+	return this.SetEx(key, value, 0)
 }
 
 func (this *cache[T]) SetEx(key string, value T, seconds int64) bool {
