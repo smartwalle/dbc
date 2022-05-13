@@ -147,7 +147,7 @@ func (this *shardCache[T]) Get(key string) (T, bool) {
 			return this.empty, false
 		}
 
-		if this.hitTTL > 0 && ele.expiration > 0 && ele.expiration-now < this.hitTTL {
+		if this.hitTTL > 0 && ele.expiration-now < this.hitTTL {
 			// 忽略多个读操作同步进行可能引起的偏差
 			ele.expiration = ele.expiration + this.hitTTL
 		}

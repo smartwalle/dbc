@@ -51,6 +51,15 @@ func BenchmarkCache_Get2(b *testing.B) {
 }
 
 func BenchmarkCache_Get3(b *testing.B) {
+	c := dbc.New[string]()
+	c.SetEx("test", "test", 10)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Get("test")
+	}
+}
+
+func BenchmarkCache_Get4(b *testing.B) {
 	c := dbc.New[string](dbc.WithHitTTL(10))
 	c.SetEx("test", "test", 4)
 	b.ResetTimer()
