@@ -27,8 +27,8 @@ func (this *shardCache[T]) tick(key string) {
 	this.Lock()
 
 	var ele, ok = this.elements[key]
-	if ok {
-		if this.checkExpired(ele) {
+	if ok && ele.expiration > 0 {
+		if ele.expired(this.timeProvider()) {
 			var value = ele.value
 
 			delete(this.elements, key)
@@ -41,9 +41,7 @@ func (this *shardCache[T]) tick(key string) {
 				this.onEvicted(key, value)
 			}
 		} else {
-			if ele.expiration > 0 {
-				this.delayQueue.Enqueue(key, ele.expiration)
-			}
+			this.delayQueue.Enqueue(key, ele.expiration)
 			this.Unlock()
 		}
 	} else {
@@ -56,9 +54,11 @@ func (this *shardCache[T]) Set(key string, value T) bool {
 }
 
 func (this *shardCache[T]) SetEx(key string, value T, seconds int64) bool {
+	var now = int64(0)
 	var expiration = int64(0)
 	if seconds > 0 {
-		expiration = this.now() + seconds
+		now = this.timeProvider()
+		expiration = now + seconds
 	}
 
 	this.Lock()
@@ -74,7 +74,7 @@ func (this *shardCache[T]) SetEx(key string, value T, seconds int64) bool {
 			this.delayQueue.Enqueue(key, expiration)
 		}
 	} else {
-		var remain = ele.expiration - this.now()
+		var remain = ele.expiration - now
 
 		ele.value = value
 		ele.expiration = expiration
@@ -102,15 +102,17 @@ func (this *shardCache[T]) SetNx(key string, value T) bool {
 }
 
 func (this *shardCache[T]) Expire(key string, seconds int64) {
+	var now = int64(0)
 	var expiration = int64(0)
 	if seconds > 0 {
-		expiration = this.now() + seconds
+		now = this.timeProvider()
+		expiration = now + seconds
 	}
 
 	this.Lock()
 	var ele, ok = this.elements[key]
 	if ok {
-		var remain = ele.expiration - this.now()
+		var remain = ele.expiration - now
 
 		ele.expiration = expiration
 
@@ -129,22 +131,28 @@ func (this *shardCache[T]) Exists(key string) bool {
 }
 
 func (this *shardCache[T]) Get(key string) (T, bool) {
-	this.Lock()
+	this.RLock()
 	var ele, found = this.elements[key]
 	if found == false {
-		this.Unlock()
+		this.RUnlock()
 		return this.empty, false
 	}
 
-	if this.checkExpired(ele) {
-		this.Unlock()
-		return this.empty, false
+	if ele.expiration > 0 {
+		var now = this.timeProvider()
+
+		if ele.expired(now) {
+			this.RUnlock()
+			return this.empty, false
+		}
+
+		if this.hitTTL > 0 && ele.expiration > 0 && ele.expiration-now < this.hitTTL {
+			// 忽略多个读操作同步进行可能引起的偏差
+			ele.expiration = ele.expiration + this.hitTTL
+		}
 	}
 
-	if this.hitTTL > 0 && ele.expiration > 0 && ele.expiration-this.now() < this.hitTTL {
-		ele.expiration = ele.expiration + this.hitTTL
-	}
-	this.Unlock()
+	this.RUnlock()
 
 	return ele.value, true
 }
@@ -152,19 +160,20 @@ func (this *shardCache[T]) Get(key string) (T, bool) {
 func (this *shardCache[T]) Del(key string) {
 	this.Lock()
 	var ele, found = this.elements[key]
-	if found {
-		delete(this.elements, key)
-
-		if this.onEvicted != nil {
-			this.onEvicted(key, ele.value)
-		}
-
-		if ele.expiration <= 0 {
-			ele.value = this.empty
-			ele.expiration = 0
-		}
+	if found == false {
+		this.Unlock()
+		return
 	}
+
+	delete(this.elements, key)
 	this.Unlock()
+
+	if this.onEvicted != nil {
+		this.onEvicted(key, ele.value)
+	}
+
+	ele.value = this.empty
+	ele.expiration = 0
 }
 
 func (this *shardCache[T]) close() {
@@ -175,9 +184,4 @@ func (this *shardCache[T]) close() {
 		this.RLock()
 	}
 	this.RUnlock()
-}
-
-// checkExpired 检测是否过期
-func (this *shardCache[T]) checkExpired(ele *Element[T]) bool {
-	return ele.expiration > 0 && this.now() >= ele.expiration
 }

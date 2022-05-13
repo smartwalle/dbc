@@ -30,10 +30,10 @@ type Cache[T any] interface {
 type Option func(opt *option)
 
 type option struct {
-	now    func() int64
-	hitTTL int64
-	seed   uint32
-	shard  uint32
+	timeProvider func() int64
+	hitTTL       int64
+	seed         uint32
+	shard        uint32
 }
 
 // WithHitTTL 设置访问命中延长过期时间
@@ -59,7 +59,7 @@ func New[T any](opts ...Option) Cache[T] {
 	nCache.option = &option{
 		seed:  rand.New(rand.NewSource(time.Now().Unix())).Uint32(),
 		shard: 32,
-		now: func() int64 {
+		timeProvider: func() int64 {
 			return time.Now().Unix()
 		},
 	}
@@ -71,7 +71,7 @@ func New[T any](opts ...Option) Cache[T] {
 	}
 	nCache.delayQueue = delay.New[string](
 		delay.WithTimeUnit(time.Second),
-		delay.WithTimeProvider(nCache.now),
+		delay.WithTimeProvider(nCache.timeProvider),
 	)
 
 	nCache.shards = make([]*shardCache[T], nCache.shard)

@@ -33,6 +33,32 @@ func BenchmarkCache_Get(b *testing.B) {
 	get(c, b)
 }
 
+func BenchmarkCache_Set2(b *testing.B) {
+	c := dbc.New[string]()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Set("test", "test")
+	}
+}
+
+func BenchmarkCache_Get2(b *testing.B) {
+	c := dbc.New[string]()
+	c.Set("test", "test")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Get("test")
+	}
+}
+
+func BenchmarkCache_Get3(b *testing.B) {
+	c := dbc.New[string](dbc.WithHitTTL(10))
+	c.SetEx("test", "test", 4)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Get("test")
+	}
+}
+
 func BenchmarkCache_Close(b *testing.B) {
 	c := dbc.New[string]()
 
