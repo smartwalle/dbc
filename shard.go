@@ -6,7 +6,7 @@ import (
 )
 
 type shardCache[T any] struct {
-	*option
+	*options
 	*sync.RWMutex
 	elements   map[string]*Element[T]
 	delayQueue delay.Queue[string]
@@ -14,9 +14,9 @@ type shardCache[T any] struct {
 	empty      T
 }
 
-func newShard[T any](delayQueue delay.Queue[string], opt *option) *shardCache[T] {
+func newShard[T any](delayQueue delay.Queue[string], opts *options) *shardCache[T] {
 	var shard = &shardCache[T]{}
-	shard.option = opt
+	shard.options = opts
 	shard.RWMutex = &sync.RWMutex{}
 	shard.elements = make(map[string]*Element[T])
 	shard.delayQueue = delayQueue

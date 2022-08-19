@@ -27,9 +27,9 @@ type Cache[T any] interface {
 	OnEvicted(func(key string, value T))
 }
 
-type Option func(opt *option)
+type Option func(opt *options)
 
-type option struct {
+type options struct {
 	timeProvider func() int64
 	hitTTL       int64
 	seed         uint32
@@ -39,16 +39,16 @@ type option struct {
 // WithHitTTL 设置访问命中延长过期时间
 // 当调用 Get 方法有获取到数据，该数据有设置过期时间并且过期时间小于本方法指定的值，则在原有过期时间上加上本方法指定的值
 func WithHitTTL(seconds int64) Option {
-	return func(opt *option) {
+	return func(opts *options) {
 		if seconds < 0 {
 			seconds = 0
 		}
-		opt.hitTTL = seconds
+		opts.hitTTL = seconds
 	}
 }
 
 type cache[T any] struct {
-	*option
+	*options
 	shards     []*shardCache[T]
 	delayQueue delay.Queue[string]
 	closed     int32
@@ -56,7 +56,7 @@ type cache[T any] struct {
 
 func New[T any](opts ...Option) Cache[T] {
 	var nCache = &cache[T]{}
-	nCache.option = &option{
+	nCache.options = &options{
 		seed:  rand.New(rand.NewSource(time.Now().Unix())).Uint32(),
 		shard: 32,
 		timeProvider: func() int64 {
@@ -66,7 +66,7 @@ func New[T any](opts ...Option) Cache[T] {
 
 	for _, opt := range opts {
 		if opt != nil {
-			opt(nCache.option)
+			opt(nCache.options)
 		}
 	}
 	nCache.delayQueue = delay.New[string](
@@ -76,7 +76,7 @@ func New[T any](opts ...Option) Cache[T] {
 
 	nCache.shards = make([]*shardCache[T], nCache.shard)
 	for i := uint32(0); i < nCache.shard; i++ {
-		nCache.shards[i] = newShard[T](nCache.delayQueue, nCache.option)
+		nCache.shards[i] = newShard[T](nCache.delayQueue, nCache.options)
 	}
 
 	go nCache.run()
