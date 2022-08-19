@@ -31,10 +31,7 @@ func (this *shardCache[T]) expireTick(key string) bool {
 		if ele.expired(this.timeProvider()) {
 			var value = ele.value
 
-			delete(this.elements, key)
-
-			ele.expiration = 0
-			ele.value = this.empty
+			this.del(ele, key)
 
 			this.Unlock()
 
@@ -167,10 +164,7 @@ func (this *shardCache[T]) Del(key string) {
 	if found {
 		var value = ele.value
 
-		delete(this.elements, key)
-
-		ele.expiration = 0
-		ele.value = this.empty
+		this.del(ele, key)
 
 		this.Unlock()
 
@@ -180,6 +174,13 @@ func (this *shardCache[T]) Del(key string) {
 	} else {
 		this.Unlock()
 	}
+}
+
+func (this *shardCache[T]) del(ele *Element[T], key string) {
+	delete(this.elements, key)
+
+	ele.expiration = 0
+	ele.value = this.empty
 }
 
 func (this *shardCache[T]) close() {
