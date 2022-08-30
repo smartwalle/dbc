@@ -48,9 +48,9 @@ func WithHitTTL(seconds int64) Option {
 }
 
 type cache[T any] struct {
-	*options
-	shards     []*shardCache[T]
 	delayQueue delay.Queue[string]
+	options    *options
+	shards     []*shardCache[T]
 	closed     int32
 }
 
@@ -71,11 +71,11 @@ func New[T any](opts ...Option) Cache[T] {
 	}
 	nCache.delayQueue = delay.New[string](
 		delay.WithTimeUnit(time.Second),
-		delay.WithTimeProvider(nCache.timeProvider),
+		delay.WithTimeProvider(nCache.options.timeProvider),
 	)
 
-	nCache.shards = make([]*shardCache[T], nCache.shard)
-	for i := uint32(0); i < nCache.shard; i++ {
+	nCache.shards = make([]*shardCache[T], nCache.options.shard)
+	for i := uint32(0); i < nCache.options.shard; i++ {
 		nCache.shards[i] = newShard[T](nCache.delayQueue, nCache.options)
 	}
 
@@ -85,7 +85,7 @@ func New[T any](opts ...Option) Cache[T] {
 }
 
 func (this *cache[T]) getShard(key string) *shardCache[T] {
-	var index = djb(this.seed, key) % this.shard
+	var index = djb(this.options.seed, key) % this.options.shard
 	return this.shards[index]
 }
 

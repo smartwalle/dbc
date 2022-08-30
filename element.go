@@ -1,8 +1,8 @@
 package dbc
 
 type Element[T any] struct {
-	expiration int64
 	value      T
+	expiration int64
 }
 
 func (this *Element[T]) expired(now int64) bool {
