@@ -2,38 +2,43 @@ package dbc
 
 import (
 	"github.com/smartwalle/queue/delay"
-	"math/rand"
 	"sync/atomic"
 	"time"
 )
 
-type Cache[T any] interface {
-	Set(key string, value T) bool
+const (
+	ShardCount = 32 // 分片数量
+)
 
-	SetEx(key string, value T, seconds int64) bool
+type Key interface {
+	~string | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
+}
 
-	SetNx(key string, value T) bool
+type Cache[K Key, V any] interface {
+	Set(key K, value V) bool
 
-	Expire(key string, seconds int64)
+	SetEx(key K, value V, seconds int64) bool
 
-	Exists(key string) bool
+	SetNx(key K, value V) bool
 
-	Get(key string) (T, bool)
+	Expire(key K, seconds int64)
 
-	Del(key string)
+	Exists(key K) bool
+
+	Get(key K) (V, bool)
+
+	Del(key K)
 
 	Close()
 
-	OnEvicted(func(key string, value T))
+	OnEvicted(func(key K, value V))
 }
 
 type Option func(opt *options)
 
 type options struct {
-	timeProvider func() int64
 	hitTTL       int64
-	seed         uint32
-	shard        uint32
+	timeProvider func() int64
 }
 
 // WithHitTTL 设置访问命中延长过期时间
@@ -47,36 +52,50 @@ func WithHitTTL(seconds int64) Option {
 	}
 }
 
-type cache[T any] struct {
-	delayQueue delay.Queue[string]
+func WithTimeProvider(f func() int64) Option {
+	return func(opt *options) {
+		opt.timeProvider = f
+	}
+}
+
+type cache[K Key, V any] struct {
+	delayQueue delay.Queue[K]
 	options    *options
-	shards     []*shardCache[T]
+	sharding   func(key K) uint32
+	shardCount uint32
+	shards     []*shardCache[K, V]
 	closed     int32
 }
 
-func New[T any](opts ...Option) Cache[T] {
-	var nCache = &cache[T]{}
-	nCache.options = &options{
-		seed:  rand.New(rand.NewSource(time.Now().Unix())).Uint32(),
-		shard: 32,
-		timeProvider: func() int64 {
-			return time.Now().Unix()
-		},
-	}
+func New[V any](opts ...Option) Cache[string, V] {
+	return NewCache[string, V](DJBSharding(), opts...)
+}
+
+func NewCache[K Key, V any](sharding func(key K) uint32, opts ...Option) Cache[K, V] {
+	var nCache = &cache[K, V]{}
+	nCache.options = &options{}
+	nCache.sharding = sharding
+	nCache.shardCount = ShardCount
 
 	for _, opt := range opts {
 		if opt != nil {
 			opt(nCache.options)
 		}
 	}
-	nCache.delayQueue = delay.New[string](
+	if nCache.options.timeProvider == nil {
+		nCache.options.timeProvider = func() int64 {
+			return time.Now().Unix()
+		}
+	}
+
+	nCache.delayQueue = delay.New[K](
 		delay.WithTimeUnit(time.Second),
 		delay.WithTimeProvider(nCache.options.timeProvider),
 	)
 
-	nCache.shards = make([]*shardCache[T], nCache.options.shard)
-	for i := uint32(0); i < nCache.options.shard; i++ {
-		nCache.shards[i] = newShard[T](nCache.delayQueue, nCache.options)
+	nCache.shards = make([]*shardCache[K, V], nCache.shardCount)
+	for i := uint32(0); i < nCache.shardCount; i++ {
+		nCache.shards[i] = newShard[K, V](nCache.delayQueue, nCache.options)
 	}
 
 	go nCache.run()
@@ -84,12 +103,12 @@ func New[T any](opts ...Option) Cache[T] {
 	return nCache
 }
 
-func (this *cache[T]) getShard(key string) *shardCache[T] {
-	var index = djb(this.options.seed, key) % this.options.shard
+func (this *cache[K, V]) getShard(key K) *shardCache[K, V] {
+	var index = this.sharding(key)
 	return this.shards[index]
 }
 
-func (this *cache[T]) run() {
+func (this *cache[K, V]) run() {
 	for {
 		var key, expiration = this.delayQueue.Dequeue()
 
@@ -101,44 +120,44 @@ func (this *cache[T]) run() {
 	}
 }
 
-func (this *cache[T]) Set(key string, value T) bool {
+func (this *cache[K, V]) Set(key K, value V) bool {
 	return this.SetEx(key, value, 0)
 }
 
-func (this *cache[T]) SetEx(key string, value T, seconds int64) bool {
+func (this *cache[K, V]) SetEx(key K, value V, seconds int64) bool {
 	if atomic.LoadInt32(&this.closed) == 1 {
 		return false
 	}
 	return this.getShard(key).SetEx(key, value, seconds)
 }
 
-func (this *cache[T]) SetNx(key string, value T) bool {
+func (this *cache[K, V]) SetNx(key K, value V) bool {
 	if atomic.LoadInt32(&this.closed) == 1 {
 		return false
 	}
 	return this.getShard(key).SetNx(key, value)
 }
 
-func (this *cache[T]) Expire(key string, seconds int64) {
+func (this *cache[K, V]) Expire(key K, seconds int64) {
 	if atomic.LoadInt32(&this.closed) == 1 {
 		return
 	}
 	this.getShard(key).Expire(key, seconds)
 }
 
-func (this *cache[T]) Exists(key string) bool {
+func (this *cache[K, V]) Exists(key K) bool {
 	return this.getShard(key).Exists(key)
 }
 
-func (this *cache[T]) Get(key string) (T, bool) {
+func (this *cache[K, V]) Get(key K) (V, bool) {
 	return this.getShard(key).Get(key)
 }
 
-func (this *cache[T]) Del(key string) {
+func (this *cache[K, V]) Del(key K) {
 	this.getShard(key).Del(key)
 }
 
-func (this *cache[T]) Close() {
+func (this *cache[K, V]) Close() {
 	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
 		this.delayQueue.Close()
 		for _, shard := range this.shards {
@@ -147,7 +166,7 @@ func (this *cache[T]) Close() {
 	}
 }
 
-func (this *cache[T]) OnEvicted(f func(key string, value T)) {
+func (this *cache[K, V]) OnEvicted(f func(key K, value V)) {
 	for _, shard := range this.shards {
 		shard.onEvicted = f
 	}

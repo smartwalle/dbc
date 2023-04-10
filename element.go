@@ -1,10 +1,10 @@
 package dbc
 
-type Element[T any] struct {
-	value      T
+type Element[V any] struct {
+	value      V
 	expiration int64
 }
 
-func (this *Element[T]) expired(now int64) bool {
+func (this *Element[V]) expired(now int64) bool {
 	return this.expiration > 0 && now >= this.expiration
 }

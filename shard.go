@@ -5,24 +5,24 @@ import (
 	"sync"
 )
 
-type shardCache[T any] struct {
-	delayQueue delay.Queue[string]
-	empty      T
+type shardCache[K Key, V any] struct {
+	delayQueue delay.Queue[K]
+	empty      V
 	options    *options
-	elements   map[string]*Element[T]
-	onEvicted  func(string, T)
+	elements   map[K]*Element[V]
+	onEvicted  func(K, V)
 	mu         sync.RWMutex
 }
 
-func newShard[T any](delayQueue delay.Queue[string], opts *options) *shardCache[T] {
-	var shard = &shardCache[T]{}
+func newShard[K Key, V any](delayQueue delay.Queue[K], opts *options) *shardCache[K, V] {
+	var shard = &shardCache[K, V]{}
 	shard.options = opts
-	shard.elements = make(map[string]*Element[T])
+	shard.elements = make(map[K]*Element[V])
 	shard.delayQueue = delayQueue
 	return shard
 }
 
-func (this *shardCache[T]) expireTick(key string) bool {
+func (this *shardCache[K, V]) expireTick(key K) bool {
 	this.mu.Lock()
 
 	var ele, found = this.elements[key]
@@ -49,11 +49,11 @@ func (this *shardCache[T]) expireTick(key string) bool {
 	}
 }
 
-func (this *shardCache[T]) Set(key string, value T) bool {
+func (this *shardCache[K, V]) Set(key K, value V) bool {
 	return this.SetEx(key, value, 0)
 }
 
-func (this *shardCache[T]) SetEx(key string, value T, seconds int64) bool {
+func (this *shardCache[K, V]) SetEx(key K, value V, seconds int64) bool {
 	var now = int64(0)
 	var expiration = int64(0)
 	if seconds > 0 {
@@ -65,7 +65,7 @@ func (this *shardCache[T]) SetEx(key string, value T, seconds int64) bool {
 	var ele, _ = this.elements[key]
 
 	if ele == nil {
-		ele = &Element[T]{}
+		ele = &Element[V]{}
 		ele.expiration = expiration
 		ele.value = value
 		this.elements[key] = ele
@@ -87,8 +87,8 @@ func (this *shardCache[T]) SetEx(key string, value T, seconds int64) bool {
 	return true
 }
 
-func (this *shardCache[T]) SetNx(key string, value T) bool {
-	var ele = &Element[T]{}
+func (this *shardCache[K, V]) SetNx(key K, value V) bool {
+	var ele = &Element[V]{}
 	ele.value = value
 	ele.expiration = 0
 
@@ -101,7 +101,7 @@ func (this *shardCache[T]) SetNx(key string, value T) bool {
 	return found == false
 }
 
-func (this *shardCache[T]) Expire(key string, seconds int64) {
+func (this *shardCache[K, V]) Expire(key K, seconds int64) {
 	var now = int64(0)
 	var expiration = int64(0)
 	if seconds > 0 {
@@ -123,14 +123,14 @@ func (this *shardCache[T]) Expire(key string, seconds int64) {
 	this.mu.Unlock()
 }
 
-func (this *shardCache[T]) Exists(key string) bool {
+func (this *shardCache[K, V]) Exists(key K) bool {
 	this.mu.RLock()
 	var _, found = this.elements[key]
 	this.mu.RUnlock()
 	return found
 }
 
-func (this *shardCache[T]) Get(key string) (T, bool) {
+func (this *shardCache[K, V]) Get(key K) (V, bool) {
 	this.mu.RLock()
 	var ele, found = this.elements[key]
 	if found == false {
@@ -157,7 +157,7 @@ func (this *shardCache[T]) Get(key string) (T, bool) {
 	return ele.value, true
 }
 
-func (this *shardCache[T]) Del(key string) {
+func (this *shardCache[K, V]) Del(key K) {
 	this.mu.Lock()
 	var ele, found = this.elements[key]
 	if found {
@@ -175,14 +175,14 @@ func (this *shardCache[T]) Del(key string) {
 	}
 }
 
-func (this *shardCache[T]) del(ele *Element[T], key string) {
+func (this *shardCache[K, V]) del(ele *Element[V], key K) {
 	delete(this.elements, key)
 
 	ele.expiration = 0
 	ele.value = this.empty
 }
 
-func (this *shardCache[T]) close() {
+func (this *shardCache[K, V]) close() {
 	this.mu.RLock()
 	for key := range this.elements {
 		this.mu.RUnlock()

@@ -1,91 +1,42 @@
 package dbc_test
 
 import (
+	"fmt"
 	"github.com/smartwalle/dbc"
+	"runtime"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 )
 
-func set(c dbc.Cache[string], b *testing.B) {
+func BenchmarkCache_SetStringString(b *testing.B) {
+	var m = dbc.New[string]()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c.Set("sss"+strconv.Itoa(i), "hello")
+		m.Set(strconv.Itoa(i), "hello")
 	}
 }
 
-func get(c dbc.Cache[string], b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		c.Get("sss" + strconv.Itoa(i))
-	}
-}
-
-func BenchmarkCache_Set(b *testing.B) {
-	c := dbc.New[string]()
-	b.ResetTimer()
-	set(c, b)
-}
-
-func BenchmarkCache_Get(b *testing.B) {
-	c := dbc.New[string]()
-	set(c, b)
-	b.ResetTimer()
-	get(c, b)
-}
-
-func BenchmarkCache_Set2(b *testing.B) {
-	c := dbc.New[string]()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c.Set("test", "test")
-	}
-}
-
-func BenchmarkCache_Get2(b *testing.B) {
-	c := dbc.New[string]()
-	c.Set("test", "test")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c.Get("test")
-	}
-}
-
-func BenchmarkCache_Get3(b *testing.B) {
-	c := dbc.New[string]()
-	c.SetEx("test", "test", 10)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c.Get("test")
-	}
-}
-
-func BenchmarkCache_Get4(b *testing.B) {
-	c := dbc.New[string](dbc.WithHitTTL(10))
-	c.SetEx("test", "test", 4)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c.Get("test")
-	}
-}
-
-func BenchmarkCache_Close(b *testing.B) {
-	c := dbc.New[string]()
-
-	var w = &sync.WaitGroup{}
-	for i := 0; i < b.N; i++ {
-		c.Set("sss"+strconv.Itoa(i), "hello")
-		w.Add(1)
-	}
-
-	b.ResetTimer()
-
-	c.OnEvicted(func(key string, value string) {
-		w.Done()
+func BenchmarkCache_SetIntString(b *testing.B) {
+	var m = dbc.NewCache[int, string](func(key int) uint32 {
+		return uint32(key % dbc.ShardCount)
 	})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m.Set(i, "hello")
+	}
+}
 
-	c.Close()
+func BenchmarkCache_GetStringString(b *testing.B) {
+	var m = dbc.New[string]()
+	for i := 0; i < b.N; i++ {
+		m.Set(strconv.Itoa(i), "hello")
+	}
 
-	w.Wait()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m.Get(strconv.Itoa(i))
+	}
 }
 
 func TestCache_SetEx(t *testing.T) {
@@ -228,4 +179,36 @@ func TestCache_SetNx(t *testing.T) {
 	if v, _ := c.Get("k1"); v != "v1" {
 		t.Fatal("k1 的值应该是 v1")
 	}
+}
+
+const N = 30000000
+
+func TimeGC() time.Duration {
+	start := time.Now()
+	runtime.GC()
+	return time.Since(start)
+}
+
+func TestCache_GC_SV(t *testing.T) {
+	var m = dbc.New[int32]()
+	for i := 0; i < N; i++ {
+		n := int32(i)
+		m.Set(fmt.Sprintf("%d", n), n)
+	}
+	runtime.GC()
+	t.Logf("With %T, GC took %s\n", m, TimeGC())
+	_, _ = m.Get("0")
+}
+
+func TestMap_GC_IV(t *testing.T) {
+	var m = dbc.NewCache[int32, int32](func(key int32) uint32 {
+		return uint32(key % dbc.ShardCount)
+	})
+	for i := 0; i < N; i++ {
+		n := int32(i)
+		m.Set(n, n)
+	}
+	runtime.GC()
+	t.Logf("With %T, GC took %s\n", m, TimeGC())
+	_, _ = m.Get(0)
 }
