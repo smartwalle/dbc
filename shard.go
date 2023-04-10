@@ -91,14 +91,16 @@ func (this *shardCache[K, V]) SetEx(key K, value V, seconds int64) bool {
 func (this *shardCache[K, V]) SetNx(key K, value V) bool {
 	this.mu.Lock()
 	var _, found = this.elements[key]
-	if found == false {
+	if !found {
 		var ele = Element[V]{}
 		ele.value = value
 		ele.expiration = 0
 		this.elements[key] = ele
+		this.mu.Unlock()
+		return true
 	}
 	this.mu.Unlock()
-	return found == false
+	return false
 }
 
 func (this *shardCache[K, V]) Expire(key K, seconds int64) {
@@ -134,7 +136,7 @@ func (this *shardCache[K, V]) Exists(key K) bool {
 func (this *shardCache[K, V]) Get(key K) (V, bool) {
 	this.mu.RLock()
 	var ele, found = this.elements[key]
-	if found == false {
+	if !found {
 		this.mu.RUnlock()
 		return this.empty, false
 	}
