@@ -195,7 +195,6 @@ func TestCache_GC_SV(t *testing.T) {
 		n := int32(i)
 		m.Set(fmt.Sprintf("%d", n), n)
 	}
-	runtime.GC()
 	t.Logf("With %T, GC took %s\n", m, TimeGC())
 	_, _ = m.Get("0")
 }
@@ -208,7 +207,6 @@ func TestCache_GC_IV(t *testing.T) {
 		n := int32(i)
 		m.Set(n, n)
 	}
-	runtime.GC()
 	t.Logf("With %T, GC took %s\n", m, TimeGC())
 	_, _ = m.Get(0)
 }
@@ -226,7 +224,6 @@ func TestCache_GC_IV_Human(t *testing.T) {
 		n := int32(i)
 		m.Set(n, Human{Age: n})
 	}
-	runtime.GC()
 	t.Logf("With %T, GC took %s\n", m, TimeGC())
 	_, _ = m.Get(0)
 }
@@ -239,7 +236,6 @@ func TestCache_GC_IP_Human(t *testing.T) {
 		n := int32(i)
 		m.Set(n, &Human{Age: n})
 	}
-	runtime.GC()
 	t.Logf("With %T, GC took %s\n", m, TimeGC())
 	_, _ = m.Get(0)
 }
