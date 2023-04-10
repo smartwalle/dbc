@@ -29,6 +29,8 @@ type Cache[K Key, V any] interface {
 
 	Del(key K)
 
+	Len() int
+
 	Close()
 
 	OnEvicted(func(key K, value V))
@@ -155,6 +157,17 @@ func (this *cache[K, V]) Get(key K) (V, bool) {
 
 func (this *cache[K, V]) Del(key K) {
 	this.getShard(key).Del(key)
+}
+
+func (this *cache[K, V]) Len() int {
+	var count = 0
+	for i := uint32(0); i < this.shardCount; i++ {
+		var shard = this.shards[i]
+		shard.mu.RLock()
+		count += len(shard.elements)
+		shard.mu.RUnlock()
+	}
+	return count
 }
 
 func (this *cache[K, V]) Close() {

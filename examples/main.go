@@ -20,6 +20,8 @@ func main() {
 	cache.SetEx("kk3", "vv3", 2)
 	cache.SetEx("kk4", "vv4", 2)
 
+	fmt.Println(cache.Len())
+
 	time.Sleep(time.Second * 3)
 
 	fmt.Println(cache.Get("k1"))
@@ -30,4 +32,6 @@ func main() {
 	fmt.Println(cache.Get("kk2"))
 	fmt.Println(cache.Get("kk3"))
 	fmt.Println(cache.Get("kk4"))
+
+	fmt.Println(cache.Len())
 }
