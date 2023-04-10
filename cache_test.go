@@ -200,13 +200,44 @@ func TestCache_GC_SV(t *testing.T) {
 	_, _ = m.Get("0")
 }
 
-func TestMap_GC_IV(t *testing.T) {
+func TestCache_GC_IV(t *testing.T) {
 	var m = dbc.NewCache[int32, int32](func(key int32) uint32 {
 		return uint32(key % dbc.ShardCount)
 	})
 	for i := 0; i < N; i++ {
 		n := int32(i)
 		m.Set(n, n)
+	}
+	runtime.GC()
+	t.Logf("With %T, GC took %s\n", m, TimeGC())
+	_, _ = m.Get(0)
+}
+
+type Human struct {
+	Age    int32
+	Number int32
+}
+
+func TestCache_GC_IV_Human(t *testing.T) {
+	var m = dbc.NewCache[int32, Human](func(key int32) uint32 {
+		return uint32(key % dbc.ShardCount)
+	})
+	for i := 0; i < N; i++ {
+		n := int32(i)
+		m.Set(n, Human{Age: n})
+	}
+	runtime.GC()
+	t.Logf("With %T, GC took %s\n", m, TimeGC())
+	_, _ = m.Get(0)
+}
+
+func TestCache_GC_IP_Human(t *testing.T) {
+	var m = dbc.NewCache[int32, *Human](func(key int32) uint32 {
+		return uint32(key % dbc.ShardCount)
+	})
+	for i := 0; i < N; i++ {
+		n := int32(i)
+		m.Set(n, &Human{Age: n})
 	}
 	runtime.GC()
 	t.Logf("With %T, GC took %s\n", m, TimeGC())
