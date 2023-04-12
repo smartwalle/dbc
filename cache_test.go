@@ -39,6 +39,20 @@ func BenchmarkCache_GetStringString(b *testing.B) {
 	}
 }
 
+func BenchmarkCache_GetIntString(b *testing.B) {
+	var m = dbc.NewCache[int, string](func(key int) uint32 {
+		return uint32(key % dbc.ShardCount)
+	})
+	for i := 0; i < b.N; i++ {
+		m.Set(i, "hello")
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m.Get(i)
+	}
+}
+
 func TestCache_SetEx(t *testing.T) {
 	c := dbc.New[string]()
 	c.OnEvicted(func(key string, value string) {
