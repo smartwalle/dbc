@@ -54,9 +54,9 @@ func WithHitTTL(seconds int64) Option {
 	}
 }
 
-func WithTimeProvider(f func() int64) Option {
+func WithTimeProvider(fn func() int64) Option {
 	return func(opt *options) {
-		opt.timeProvider = f
+		opt.timeProvider = fn
 	}
 }
 
@@ -179,8 +179,8 @@ func (this *cache[K, V]) Close() {
 	}
 }
 
-func (this *cache[K, V]) OnEvicted(f func(key K, value V)) {
+func (this *cache[K, V]) OnEvicted(fn func(key K, value V)) {
 	for _, shard := range this.shards {
-		shard.onEvicted = f
+		shard.onEvicted = fn
 	}
 }
