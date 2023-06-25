@@ -29,9 +29,7 @@ func (this *shardCache[K, V]) expireTick(key K) bool {
 	if found && ele.expiration > 0 {
 		if ele.expired(this.options.timeProvider()) {
 			var value = ele.value
-
 			this.del(ele, key)
-
 			this.mu.Unlock()
 
 			if this.onEvicted != nil {
@@ -166,9 +164,7 @@ func (this *shardCache[K, V]) Del(key K) {
 	var ele, found = this.elements[key]
 	if found {
 		var value = ele.value
-
 		this.del(ele, key)
-
 		this.mu.Unlock()
 
 		if this.onEvicted != nil {
