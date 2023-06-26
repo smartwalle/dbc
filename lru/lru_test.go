@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func BenchmarkCache_SetIntString(b *testing.B) {
-	var m = lru.NewLRU[int, string](1000000)
+func BenchmarkLRU_SetIntString(b *testing.B) {
+	var m = lru.New[int, string](1000000)
 	m.OnEvicted(func(key int, value string) {
 	})
 	b.ResetTimer()

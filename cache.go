@@ -1,6 +1,7 @@
 package dbc
 
 import (
+	"github.com/smartwalle/dbc/internal"
 	"github.com/smartwalle/queue/delay"
 	"sync/atomic"
 	"time"
@@ -10,9 +11,7 @@ const (
 	ShardCount = 32 // 分片数量
 )
 
-type Key interface {
-	~string | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
-}
+type Key = internal.Key
 
 type Cache[K Key, V any] interface {
 	Set(key K, value V) bool

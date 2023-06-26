@@ -1,10 +1,14 @@
-package lru
+package internal
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 // This is a fork of container/list
+
+type Key interface {
+	~string | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
+}
 
 type Element[K Key, V any] struct {
 	next, prev *Element[K, V]
