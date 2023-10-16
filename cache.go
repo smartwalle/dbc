@@ -104,64 +104,64 @@ func NewCache[K Key, V any](sharding func(key K) uint32, opts ...Option) Cache[K
 	return nCache
 }
 
-func (this *cache[K, V]) getShard(key K) *shardCache[K, V] {
-	var index = this.sharding(key)
-	return this.shards[index]
+func (c *cache[K, V]) getShard(key K) *shardCache[K, V] {
+	var index = c.sharding(key)
+	return c.shards[index]
 }
 
-func (this *cache[K, V]) run() {
+func (c *cache[K, V]) run() {
 	for {
-		var key, expiration = this.delayQueue.Dequeue()
+		var key, expiration = c.delayQueue.Dequeue()
 
 		if expiration < 0 {
 			return
 		}
 
-		this.getShard(key).expireTick(key)
+		c.getShard(key).expireTick(key)
 	}
 }
 
-func (this *cache[K, V]) Set(key K, value V) bool {
-	return this.SetEx(key, value, 0)
+func (c *cache[K, V]) Set(key K, value V) bool {
+	return c.SetEx(key, value, 0)
 }
 
-func (this *cache[K, V]) SetEx(key K, value V, seconds int64) bool {
-	if atomic.LoadInt32(&this.closed) == 1 {
+func (c *cache[K, V]) SetEx(key K, value V, seconds int64) bool {
+	if atomic.LoadInt32(&c.closed) == 1 {
 		return false
 	}
-	return this.getShard(key).SetEx(key, value, seconds)
+	return c.getShard(key).SetEx(key, value, seconds)
 }
 
-func (this *cache[K, V]) SetNx(key K, value V) bool {
-	if atomic.LoadInt32(&this.closed) == 1 {
+func (c *cache[K, V]) SetNx(key K, value V) bool {
+	if atomic.LoadInt32(&c.closed) == 1 {
 		return false
 	}
-	return this.getShard(key).SetNx(key, value)
+	return c.getShard(key).SetNx(key, value)
 }
 
-func (this *cache[K, V]) Expire(key K, seconds int64) {
-	if atomic.LoadInt32(&this.closed) == 1 {
+func (c *cache[K, V]) Expire(key K, seconds int64) {
+	if atomic.LoadInt32(&c.closed) == 1 {
 		return
 	}
-	this.getShard(key).Expire(key, seconds)
+	c.getShard(key).Expire(key, seconds)
 }
 
-func (this *cache[K, V]) Exists(key K) bool {
-	return this.getShard(key).Exists(key)
+func (c *cache[K, V]) Exists(key K) bool {
+	return c.getShard(key).Exists(key)
 }
 
-func (this *cache[K, V]) Get(key K) (V, bool) {
-	return this.getShard(key).Get(key)
+func (c *cache[K, V]) Get(key K) (V, bool) {
+	return c.getShard(key).Get(key)
 }
 
-func (this *cache[K, V]) Del(key K) {
-	this.getShard(key).Del(key)
+func (c *cache[K, V]) Del(key K) {
+	c.getShard(key).Del(key)
 }
 
-func (this *cache[K, V]) Len() int {
+func (c *cache[K, V]) Len() int {
 	var count = 0
-	for i := uint32(0); i < this.shardCount; i++ {
-		var shard = this.shards[i]
+	for i := uint32(0); i < c.shardCount; i++ {
+		var shard = c.shards[i]
 		shard.mu.RLock()
 		count += len(shard.elements)
 		shard.mu.RUnlock()
@@ -169,17 +169,17 @@ func (this *cache[K, V]) Len() int {
 	return count
 }
 
-func (this *cache[K, V]) Close() {
-	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
-		this.delayQueue.Close()
-		for _, shard := range this.shards {
+func (c *cache[K, V]) Close() {
+	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
+		c.delayQueue.Close()
+		for _, shard := range c.shards {
 			go shard.close()
 		}
 	}
 }
 
-func (this *cache[K, V]) OnEvicted(fn func(key K, value V)) {
-	for _, shard := range this.shards {
+func (c *cache[K, V]) OnEvicted(fn func(key K, value V)) {
+	for _, shard := range c.shards {
 		shard.onEvicted = fn
 	}
 }

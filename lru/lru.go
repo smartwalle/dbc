@@ -62,78 +62,78 @@ func New[K Key, V any](opts ...Option) *Cache[K, V] {
 	return nLRU
 }
 
-func (this *Cache[K, V]) Set(key K, value V) bool {
-	this.mu.Lock()
-	var ele, found = this.elements[key]
+func (c *Cache[K, V]) Set(key K, value V) bool {
+	c.mu.Lock()
+	var ele, found = c.elements[key]
 	if found {
 		ele.Value = value
-		this.list.MoveToFront(ele)
-		this.mu.Unlock()
+		c.list.MoveToFront(ele)
+		c.mu.Unlock()
 		return true
 	}
 
-	ele = this.list.PushFront(key, value)
-	this.elements[key] = ele
-	var needEvict = this.list.Len() > this.size
+	ele = c.list.PushFront(key, value)
+	c.elements[key] = ele
+	var needEvict = c.list.Len() > c.size
 
 	if needEvict {
-		var last = this.list.Back()
-		this.removeElement(last)
-		this.mu.Unlock()
-		this.evict(last)
+		var last = c.list.Back()
+		c.removeElement(last)
+		c.mu.Unlock()
+		c.evict(last)
 		return true
 	}
-	this.mu.Unlock()
+	c.mu.Unlock()
 	return true
 }
 
-func (this *Cache[K, V]) Exists(key K) bool {
-	this.mu.Lock()
-	var _, found = this.elements[key]
-	this.mu.Unlock()
+func (c *Cache[K, V]) Exists(key K) bool {
+	c.mu.Lock()
+	var _, found = c.elements[key]
+	c.mu.Unlock()
 	return found
 }
 
-func (this *Cache[K, V]) Get(key K) (value V, ok bool) {
-	this.mu.Lock()
-	if ele, found := this.elements[key]; found {
-		this.list.MoveToFront(ele)
-		this.mu.Unlock()
+func (c *Cache[K, V]) Get(key K) (value V, ok bool) {
+	c.mu.Lock()
+	if ele, found := c.elements[key]; found {
+		c.list.MoveToFront(ele)
+		c.mu.Unlock()
 		return ele.Value, true
 	}
-	this.mu.Unlock()
+	c.mu.Unlock()
 	return
 }
 
-func (this *Cache[K, V]) Del(key K) {
-	this.mu.Lock()
-	if ele, found := this.elements[key]; found {
-		this.removeElement(ele)
-		this.mu.Unlock()
-		this.evict(ele)
+func (c *Cache[K, V]) Del(key K) {
+	c.mu.Lock()
+	if ele, found := c.elements[key]; found {
+		c.removeElement(ele)
+		c.mu.Unlock()
+		c.evict(ele)
 		return
 	}
-	this.mu.Unlock()
+	c.mu.Unlock()
 }
 
-func (this *Cache[K, V]) Len() int {
-	this.mu.Lock()
-	var l = this.list.Len()
-	this.mu.Unlock()
+func (c *Cache[K, V]) Len() int {
+	c.mu.Lock()
+	var l = c.list.Len()
+	c.mu.Unlock()
 	return l
 }
 
-func (this *Cache[K, V]) OnEvicted(fn func(key K, value V)) {
-	this.onEvicted = fn
+func (c *Cache[K, V]) OnEvicted(fn func(key K, value V)) {
+	c.onEvicted = fn
 }
 
-func (this *Cache[K, V]) removeElement(ele *internal.Element[K, V]) {
-	this.list.Remove(ele)
-	delete(this.elements, ele.Key)
+func (c *Cache[K, V]) removeElement(ele *internal.Element[K, V]) {
+	c.list.Remove(ele)
+	delete(c.elements, ele.Key)
 }
 
-func (this *Cache[K, V]) evict(ele *internal.Element[K, V]) {
-	if ele != nil && this.onEvicted != nil {
-		this.onEvicted(ele.Key, ele.Value)
+func (c *Cache[K, V]) evict(ele *internal.Element[K, V]) {
+	if ele != nil && c.onEvicted != nil {
+		c.onEvicted(ele.Key, ele.Value)
 	}
 }

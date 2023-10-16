@@ -5,6 +5,6 @@ type Element[V any] struct {
 	expiration int64
 }
 
-func (this Element[V]) expired(now int64) bool {
-	return this.expiration > 0 && now >= this.expiration
+func (e Element[V]) expired(now int64) bool {
+	return e.expiration > 0 && now >= e.expiration
 }
